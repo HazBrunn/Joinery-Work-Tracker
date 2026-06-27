@@ -11,7 +11,7 @@ const TABS = [
 
 // Desktop-only left navigation. Hidden via CSS below the desktop breakpoint,
 // where the bottom tab bar takes over instead.
-export function Sidebar() {
+export function Sidebar({ onSignOut }: { onSignOut?: () => Promise<void> }) {
   const { data } = useData();
   return (
     <aside className="sidebar">
@@ -32,6 +32,12 @@ export function Sidebar() {
           <span className="nav-icon">⚙️</span>
           Settings
         </NavLink>
+        {onSignOut && (
+          <button className="sidebar-signout" onClick={() => void onSignOut()}>
+            <span className="nav-icon">🔓</span>
+            Sign out
+          </button>
+        )}
       </div>
     </aside>
   );

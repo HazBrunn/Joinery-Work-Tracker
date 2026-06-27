@@ -1,11 +1,19 @@
-// Firebase initialisation — Firestore (database), Storage (photos), and anonymous
-// Auth so security rules can require an authenticated request. All config values
+// Firebase initialisation — Firestore (database), Storage (photos), and Google
+// Auth so only the owner's Google account can read/write data. All config values
 // here are the public web-app config (safe to ship in the client bundle); access
 // is controlled by Firestore/Storage security rules, not by hiding these keys.
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { Firestore, initializeFirestore } from 'firebase/firestore';
 import { FirebaseStorage, getStorage } from 'firebase/storage';
-import { Auth, getAuth, signInAnonymously } from 'firebase/auth';
+import {
+  Auth,
+  getAuth,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  User,
+} from 'firebase/auth';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -26,7 +34,8 @@ interface FirebaseHandles {
   db: Firestore;
   storage: FirebaseStorage;
   auth: Auth;
-  /** Resolves once anonymous sign-in has completed (or failed gracefully). */
+  /** Resolves once a signed-in Google user is detected. Since App.tsx gates
+   *  DataProvider behind auth, this resolves almost immediately after mounting. */
   authReady: Promise<void>;
 }
 
@@ -41,15 +50,30 @@ export function getFirebase(): FirebaseHandles {
     const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
     const storage = getStorage(app);
     const auth = getAuth(app);
-    const authReady = signInAnonymously(auth)
-      .then(() => undefined)
-      .catch((err) => {
-        console.error(
-          'Firebase anonymous sign-in failed. Enable Anonymous auth in the Firebase console.',
-          err,
-        );
+    const authReady = new Promise<void>((resolve) => {
+      const unsub = onAuthStateChanged(auth, (user: User | null) => {
+        if (user) {
+          unsub();
+          resolve();
+        }
       });
+    });
     handles = { app, db, storage, auth, authReady };
   }
   return handles;
 }
+
+/** Open a Google sign-in popup. Called from the Login screen. */
+export async function signInWithGoogle(): Promise<void> {
+  const { auth } = getFirebase();
+  await signInWithPopup(auth, new GoogleAuthProvider());
+}
+
+/** Sign out and return to the login screen. */
+export async function signOutUser(): Promise<void> {
+  const { auth } = getFirebase();
+  await signOut(auth);
+}
+
+export type { User };
+export { onAuthStateChanged };
