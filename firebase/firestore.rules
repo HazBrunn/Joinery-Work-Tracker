@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Firestore security rules for Joinery Jobs Tracker.
+//
+// The app stores its whole dataset in a single document at app_state/main and
+// signs in anonymously, so every request carries an auth token. These rules
+// allow read/write only to authenticated requests.
+//
+// This is a single-user, private business app. If you ever deploy it publicly,
+// tighten this to your own account — e.g. switch to Google sign-in and check
+// `request.auth.token.email == "you@example.com"`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /app_state/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

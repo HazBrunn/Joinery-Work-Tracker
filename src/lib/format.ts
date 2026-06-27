@@ -1,0 +1,101 @@
+// Formatting helpers — currency in GBP, hours/days, and dates.
+
+export function gbp(amount: number | null | undefined): string {
+  const n = amount ?? 0;
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: n % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+export function gbp2(amount: number | null | undefined): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount ?? 0);
+}
+
+// Hours → friendly "X days Yh" or "Xh", given a day length.
+export function hoursLabel(hours: number, hoursPerDay = 8): string {
+  if (!hours) return '0h';
+  if (hours < hoursPerDay) return `${trim(hours)}h`;
+  const days = Math.floor(hours / hoursPerDay);
+  const rem = +(hours - days * hoursPerDay).toFixed(2);
+  return rem ? `${days}d ${trim(rem)}h` : `${days}d`;
+}
+
+function trim(n: number): string {
+  return (+n.toFixed(2)).toString();
+}
+
+export function fmtDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+export function fmtDateShort(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+export function fmtDateTime(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// yyyy-mm-dd for a Date in local time (avoids UTC off-by-one).
+export function dateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function daysBetween(startISO: string, endISO: string): string[] {
+  const out: string[] = [];
+  const start = new Date(startISO + 'T00:00:00');
+  const end = new Date(endISO + 'T00:00:00');
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return out;
+  const cur = new Date(start);
+  while (cur <= end) {
+    out.push(dateKey(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+export function relativeDeadline(iso?: string): { text: string; overdue: boolean } {
+  if (!iso) return { text: '', overdue: false };
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const day = 86400000;
+  const overdue = diffMs < 0;
+  const absDays = Math.round(Math.abs(diffMs) / day);
+  if (Math.abs(diffMs) < day && d.toDateString() === now.toDateString()) {
+    return { text: 'Today', overdue };
+  }
+  if (overdue) return { text: `${absDays}d overdue`, overdue: true };
+  if (absDays === 0) return { text: 'Today', overdue: false };
+  if (absDays === 1) return { text: 'Tomorrow', overdue: false };
+  return { text: `in ${absDays}d`, overdue: false };
+}
