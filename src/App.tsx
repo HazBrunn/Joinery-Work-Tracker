@@ -19,6 +19,13 @@ import { SettingsScreen } from './screens/Settings';
 // True when the Firebase backend is active (baked in at build time by Vite).
 const USE_FIREBASE = import.meta.env.VITE_DATA_BACKEND === 'firebase' && firebaseConfigured();
 
+// The owner's Firebase Auth UID. Only this account may use the app — any other
+// signed-in Google account is shown the "no access" screen. This is the same UID
+// enforced in firebase/firestore.rules; it's not a secret (the database rules are
+// the real guard), this just gives other accounts a clean rejection instead of an
+// empty/demo app. An env var (VITE_OWNER_UID) overrides it if ever set.
+const OWNER_UID = import.meta.env.VITE_OWNER_UID || 'Zzrd3zL0gNQI1DsT263Dw8qfFKg1';
+
 export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   // If Firebase isn't in use, skip the auth check entirely.
@@ -47,12 +54,49 @@ export default function App() {
     return <Login />;
   }
 
+  // Signed in, but with the wrong Google account — reject before any data loads.
+  if (USE_FIREBASE && authUser && authUser.uid !== OWNER_UID) {
+    return <NoAccess account={authUser.email ?? authUser.displayName ?? undefined} />;
+  }
+
   // DataProvider only mounts after auth is confirmed, so load() is only called
   // once the user is signed in and authReady resolves immediately.
   return (
     <DataProvider>
       <AppContent onSignOut={USE_FIREBASE ? signOutUser : undefined} authUser={authUser} />
     </DataProvider>
+  );
+}
+
+// Shown when someone signs in with a Google account that isn't the owner's.
+function NoAccess({ account }: { account?: string }) {
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-brand">
+          <div className="login-logo" style={{ display: 'grid', placeItems: 'center', fontSize: 28 }}>
+            🔒
+          </div>
+          <h1>No access</h1>
+          <p className="muted">This is a private business tracker.</p>
+        </div>
+        <div className="divider" />
+        <p className="tiny" style={{ textAlign: 'center', margin: '16px 0' }}>
+          {account ? (
+            <>
+              You're signed in as <strong>{account}</strong>, which isn't the owner of this tracker.
+            </>
+          ) : (
+            <>This Google account isn't the owner of this tracker.</>
+          )}
+          <br />
+          Sign out and use the owner's Google account.
+        </p>
+        <button className="btn-google" onClick={() => void signOutUser()}>
+          Sign out
+        </button>
+      </div>
+    </div>
   );
 }
 
