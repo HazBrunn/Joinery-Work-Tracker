@@ -243,6 +243,23 @@ export function nextDeadlines(data: AppData, count: number): NextDeadline[] {
     .slice(0, count);
 }
 
+/**
+ * When a job last saw money, for ordering the list.
+ *
+ * The date it was added says when it was typed in, which is the wrong thing to
+ * sort by the moment you start entering last year's work — a job finished in
+ * March has no business sitting above one finished last week because it was
+ * back-filled this morning. A job with nothing received yet falls back to the
+ * date it was added, which keeps new work at the top where it belongs.
+ */
+export function lastPaymentDate(job: Job): string {
+  let latest = '';
+  for (const p of job.stagePayments) {
+    if (p.received && p.receivedDate && p.receivedDate > latest) latest = p.receivedDate;
+  }
+  return latest || job.dateAdded;
+}
+
 export function clientById(data: AppData, id: string | null) {
   return data.clients.find((c) => c.id === id) || null;
 }

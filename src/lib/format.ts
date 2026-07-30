@@ -46,6 +46,16 @@ export function fmtDateShort(iso?: string | null): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+// A task is due on a day, not at a minute. Stored at local midday so that
+// reading the day back out is stable wherever you are and whatever the clocks
+// have done — midnight would land on the previous day in some timezones.
+export function deadlineISO(dateOnly: string): string | undefined {
+  if (!dateOnly) return undefined;
+  const [y, m, d] = dateOnly.split('-').map(Number);
+  if (!y || !m || !d) return undefined;
+  return new Date(y, m - 1, d, 12, 0, 0).toISOString();
+}
+
 export function fmtDateTime(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);

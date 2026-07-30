@@ -192,8 +192,31 @@ export interface CalendarBlock {
   hours: number; // planned hours across the block (capacity planning)
 }
 
+// Themes are CSS variable blocks in global.css keyed on [data-theme]; this is
+// the list the picker offers and the record of which are dark, which is what
+// [data-dark] keys off. Adding one is a block there and a line here.
+export interface ThemeDef {
+  id: string;
+  label: string;
+  dark: boolean;
+  /** Three colours for the swatch: accent, surface, secondary accent. */
+  swatch: [string, string, string];
+}
+
+export const THEMES: ThemeDef[] = [
+  { id: 'light',   label: 'Workshop',  dark: false, swatch: ['#1e3a5f', '#ffffff', '#e8a020'] },
+  { id: 'dark',    label: 'Night',     dark: true,  swatch: ['#e8a020', '#18222f', '#3e6fb0'] },
+  { id: 'oak',     label: 'Oak',       dark: false, swatch: ['#7a5327', '#fffdf9', '#c98a2b'] },
+  { id: 'walnut',  label: 'Walnut',    dark: true,  swatch: ['#d99a3f', '#211a13', '#6b4a2a'] },
+  { id: 'ink',     label: 'Ink',       dark: true,  swatch: ['#d9b062', '#151517', '#2a2a2a'] },
+  { id: 'slate',   label: 'Slate',     dark: false, swatch: ['#3f4c5a', '#ffffff', '#6f8296'] },
+  { id: 'sawdust', label: 'Sawdust',   dark: false, swatch: ['#3e6b4f', '#fffefa', '#c8922f'] },
+];
+
+export const themeById = (id: string): ThemeDef => THEMES.find((t) => t.id === id) ?? THEMES[0];
+
 export interface Settings {
-  theme: 'light' | 'dark';
+  theme: string;
   defaultDayRate: number; // £
   workingHoursPerDay: number; // capacity per day
   businessName: string;

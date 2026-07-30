@@ -4,7 +4,7 @@ import { Screen } from '../components/Screen';
 import { EmptyState, Field, PriorityDot, Sheet } from '../components/ui';
 import { useData } from '../store/DataContext';
 import { CalendarBlock, Job } from '../types';
-import { jobWithClient } from '../lib/labels';
+import { jobLabel, jobWithClient } from '../lib/labels';
 import { uid } from '../lib/id';
 import {
   dateKey,
@@ -414,7 +414,7 @@ function ListView({
                   </div>
                 </button>
                 <span className={`tiny nowrap ${rel.overdue ? 'text-red' : ''}`}>
-                  {e.datetime ? fmtDateTime(e.datetime) : spanLabel(e)}
+                  {e.datetime ? (e.kind === 'visit' ? fmtDateTime(e.datetime) : fmtDateShort(e.datetime)) : spanLabel(e)}
                 </span>
               </div>
             );
@@ -520,8 +520,9 @@ function DaySheet({
                 <span className="dot" style={{ background: e.color }} />
                 <span className="grow">
                   <div style={{ fontWeight: 600 }}>{e.title}</div>
-                  <div className="tiny">
+                  <div className="tiny" style={{ overflowWrap: 'anywhere' }}>
                     <KindLabel kind={e.kind} />
+                    {e.jobTitle && e.kind !== 'visit' ? ` · ${e.jobTitle}` : ''}
                     {block && multiDay ? ` · ${spanLabel(e)}` : ''}
                   </div>
                 </span>
@@ -566,6 +567,7 @@ function BlockForm({
   onClose: () => void;
   onSave: (block: CalendarBlock) => void;
 }) {
+  const { data } = useData();
   const [type, setType] = useState<'prospective' | 'time_off'>('prospective');
   const [jobId, setJobId] = useState<string>(jobs.find((j) => j.status === 'accepted')?.id ?? jobs[0]?.id ?? '');
   const [label, setLabel] = useState('');
@@ -607,7 +609,7 @@ function BlockForm({
             <select className="select" value={jobId} onChange={(e) => setJobId(e.target.value)}>
               {jobs.map((j) => (
                 <option key={j.id} value={j.id}>
-                  {j.title}
+                  {jobLabel(data, j)}
                 </option>
               ))}
             </select>

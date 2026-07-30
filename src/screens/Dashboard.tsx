@@ -4,7 +4,7 @@ import { BarChart } from '../components/ui';
 import { useData } from '../store/DataContext';
 import { dashboardMetrics, nextDeadlines } from '../lib/calc';
 import { jobWithClient } from '../lib/labels';
-import { gbp, fmtDateTime, relativeDeadline } from '../lib/format';
+import { gbp, fmtDate, relativeDeadline } from '../lib/format';
 import { NewJobForm } from './Jobs';
 import { ClientForm } from './Clients';
 import { ExpenseForm } from './Finances';
@@ -99,7 +99,7 @@ export function Dashboard() {
                       <span className="grow" style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 700 }}>{d.taskTitle}</div>
                         <div className="tiny" style={{ overflowWrap: 'anywhere' }}>
-                          {jobWithClient(data, data.jobs.find((j) => j.id === d.jobId))} · {fmtDateTime(d.deadline)}
+                          {jobWithClient(data, data.jobs.find((j) => j.id === d.jobId))} · {fmtDate(d.deadline)}
                         </div>
                       </span>
                       <span className={`pill ${rel.overdue ? 'text-red' : ''}`} style={{ fontWeight: 700, flex: '0 0 auto' }}>

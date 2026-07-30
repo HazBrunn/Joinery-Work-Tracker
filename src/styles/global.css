@@ -34,6 +34,15 @@
   --safe-top: env(safe-area-inset-top, 0px);
 }
 
+/*
+  Themes. Each sets the same handful of tokens; nothing else in the sheet knows
+  a theme exists. --blue is the header and primary-button colour, so a theme
+  changes it too rather than leaving navy on top of walnut.
+
+  Components that need a different treatment in the dark key off [data-dark],
+  set alongside [data-theme], so a new dark theme gets them without being named
+  in four more selectors.
+*/
 [data-theme='dark'] {
   --bg: #0f1622;
   --surface: #18222f;
@@ -48,6 +57,103 @@
   --amber-soft: #2a2415;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+
+/* Oak — warm and light, the colour of the material. */
+[data-theme='oak'] {
+  --blue: #7a5327;
+  --blue-700: #8c6130;
+  --blue-500: #a8763f;
+  --amber: #c98a2b;
+  --amber-soft: #f7ecda;
+  --bg: #f7f2e9;
+  --surface: #fffdf9;
+  --surface-2: #f6efe3;
+  --border: #e6dbc8;
+  --text: #2c2418;
+  --text-2: #6a5c47;
+  --text-3: #9c8d76;
+  --accent: var(--blue);
+  --accent-contrast: #ffffff;
+  --pill: #efe6d5;
+}
+
+/* Walnut — the same wood after dark. */
+[data-theme='walnut'] {
+  --blue: #6b4a2a;
+  --blue-700: #7d5731;
+  --blue-500: #c08b52;
+  --amber: #d99a3f;
+  --amber-soft: #2e2416;
+  --bg: #17120d;
+  --surface: #211a13;
+  --surface-2: #2a2118;
+  --border: #382c20;
+  --text: #f1e7db;
+  --text-2: #bda98f;
+  --text-3: #8a7862;
+  --accent: var(--amber);
+  --accent-contrast: #1d1408;
+  --pill: #2f2519;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.55);
+}
+
+/* Ink — near-black and brass, to match the app icon. */
+[data-theme='ink'] {
+  --blue: #2a2a2a;
+  --blue-700: #333333;
+  --blue-500: #c8a253;
+  --amber: #d9b062;
+  --amber-soft: #2a2418;
+  --bg: #0b0b0c;
+  --surface: #151517;
+  --surface-2: #1c1c1f;
+  --border: #2a2a2e;
+  --text: #ece9e4;
+  --text-2: #a6a29a;
+  --text-3: #726e67;
+  --accent: var(--amber);
+  --accent-contrast: #16120a;
+  --pill: #232327;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.6);
+}
+
+/* Slate — cool and plain, for bright workshops. */
+[data-theme='slate'] {
+  --blue: #3f4c5a;
+  --blue-700: #4b5a6a;
+  --blue-500: #6f8296;
+  --bg: #f2f4f6;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --border: #dfe4ea;
+  --text: #1f262d;
+  --text-2: #5a646e;
+  --text-3: #8c959e;
+  --accent: var(--blue);
+  --accent-contrast: #ffffff;
+  --pill: #e9edf1;
+}
+
+/* Sawdust — light with a green accent, for a change from brown and navy. */
+[data-theme='sawdust'] {
+  --blue: #3e6b4f;
+  --blue-700: #487a5a;
+  --blue-500: #5f9573;
+  --amber: #c8922f;
+  --amber-soft: #f2eddc;
+  --bg: #f5f4ee;
+  --surface: #fffefa;
+  --surface-2: #f3f2ea;
+  --border: #e2e0d3;
+  --text: #22261f;
+  --text-2: #5d6455;
+  --text-3: #8f9585;
+  --accent: var(--blue);
+  --accent-contrast: #ffffff;
+  --pill: #e9e8dd;
 }
 
 * {
@@ -111,7 +217,7 @@ a {
   color: #fff;
   box-shadow: var(--shadow);
 }
-[data-theme='dark'] .app-header {
+[data-dark] .app-header {
   background: #101b28;
   border-bottom: 1px solid var(--border);
 }
@@ -267,7 +373,7 @@ a {
   border-color: var(--blue);
   color: #fff;
 }
-[data-theme='dark'] .btn.primary {
+[data-dark] .btn.primary {
   background: var(--amber);
   border-color: var(--amber);
   color: var(--accent-contrast);
@@ -695,7 +801,7 @@ input[type='time'] {
   border-color: var(--blue);
   color: #fff;
 }
-[data-theme='dark'] .chip.active {
+[data-dark] .chip.active {
   background: var(--amber);
   border-color: var(--amber);
   color: var(--accent-contrast);
@@ -926,7 +1032,7 @@ input[type='time'] {
   background: var(--blue);
   color: #fff;
 }
-[data-theme='dark'] .sidebar-nav a.active {
+[data-dark] .sidebar-nav a.active {
   background: var(--amber);
   color: var(--accent-contrast);
 }

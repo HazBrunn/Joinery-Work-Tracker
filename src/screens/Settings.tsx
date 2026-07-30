@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { Screen } from '../components/Screen';
 import { Field, Sheet } from '../components/ui';
+import { DragContainer, DragHandle, DragRow, useDragList } from '../components/dragList';
 import { useData } from '../store/DataContext';
-import { jobCategoriesOf } from '../types';
+import { jobCategoriesOf, THEMES } from '../types';
 import { gbp2 } from '../lib/format';
 import { describe, exportBackup, parseBackup, summarise } from '../lib/backup';
 import type { Account } from '../App';
@@ -51,13 +52,39 @@ export function SettingsScreen({ onSignOut, authUser }: Props) {
       </div>
       <div className="card pad">
         <Field label="Theme">
-          <div className="segmented">
-            <button className={s.theme === 'light' ? 'active' : ''} onClick={() => updateSettings({ theme: 'light' })}>
-              ☀️ Light
-            </button>
-            <button className={s.theme === 'dark' ? 'active' : ''} onClick={() => updateSettings({ theme: 'dark' })}>
-              🌙 Dark
-            </button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+            {THEMES.map((t) => {
+              const on = s.theme === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => updateSettings({ theme: t.id })}
+                  aria-pressed={on}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)', textAlign: 'left', minWidth: 0,
+                    border: `2px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
+                    background: 'var(--surface-2)', color: 'var(--text)',
+                  }}
+                >
+                  <span style={{ display: 'flex', flex: '0 0 auto' }}>
+                    {t.swatch.map((c, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          width: 16, height: 16, borderRadius: '50%', background: c,
+                          marginLeft: i ? -5 : 0, border: '1.5px solid var(--surface)',
+                        }}
+                      />
+                    ))}
+                  </span>
+                  <span className="grow" style={{ fontWeight: on ? 700 : 500, fontSize: 14 }}>
+                    {t.label}
+                  </span>
+                  {t.dark && <span className="tiny">🌙</span>}
+                </button>
+              );
+            })}
           </div>
         </Field>
       </div>
@@ -217,6 +244,7 @@ function JobCategoriesSheet({ onClose }: { onClose: () => void }) {
   const { data, update, updateSettings } = useData();
   const categories = jobCategoriesOf(data.settings);
   const [adding, setAdding] = useState('');
+  const dl = useDragList(categories, (next) => updateSettings({ jobCategories: next }));
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
 
@@ -241,11 +269,16 @@ function JobCategoriesSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet title="Job categories" onClose={onClose}>
-      <div className="stack-sm">
-        {categories.map((c) => {
-          const used = inUse(c);
-          return (
-            <div key={c} className="card pad" style={{ background: 'var(--surface-2)' }}>
+      <p className="tiny" style={{ marginTop: 0 }}>
+        Drag the handle to set the order they appear in on a job.
+      </p>
+      <DragContainer>
+        <div className="stack-sm">
+          {categories.map((c, i) => {
+            const used = inUse(c);
+            return (
+              <DragRow key={c} dl={dl} index={i}>
+              <div className="card pad" style={{ background: 'var(--surface-2)' }}>
               {editing === c ? (
                 <div className="row" style={{ gap: 8 }}>
                   <input
@@ -264,6 +297,7 @@ function JobCategoriesSheet({ onClose }: { onClose: () => void }) {
                 </div>
               ) : (
                 <div className="row between" style={{ gap: 8 }}>
+                  <DragHandle dl={dl} index={i} />
                   <span className="grow">
                     <div style={{ fontWeight: 600 }}>{c}</div>
                     <div className="tiny">{used ? `${used} job${used === 1 ? '' : 's'}` : 'Not used yet'}</div>
@@ -283,10 +317,12 @@ function JobCategoriesSheet({ onClose }: { onClose: () => void }) {
                   </button>
                 </div>
               )}
-            </div>
-          );
-        })}
-      </div>
+              </div>
+              </DragRow>
+            );
+          })}
+        </div>
+      </DragContainer>
 
       <div className="row" style={{ gap: 8, marginTop: 12 }}>
         <input

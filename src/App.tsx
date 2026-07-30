@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { supabase, supabaseConfigured, signOutUser as signOutSupabase } from './lib/supabase';
 import { firebaseConfigured, getFirebase, onAuthStateChanged, signOutUser as signOutFirebase } from './lib/firebase';
+import { themeById } from './types';
 import { DataProvider } from './store/DataContext';
 import { useData } from './store/DataContext';
 import { BottomNav } from './components/BottomNav';
@@ -158,9 +159,17 @@ function AppContent({
   const { data, loading, loadError } = useData();
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', data.settings.theme);
+    const theme = themeById(data.settings.theme);
+    const root = document.documentElement;
+    root.setAttribute('data-theme', theme.id);
+    // Alongside, so the handful of rules that need a different treatment in the
+    // dark apply to every dark theme rather than only the one called "dark".
+    if (theme.dark) root.setAttribute('data-dark', '');
+    else root.removeAttribute('data-dark');
+    root.style.colorScheme = theme.dark ? 'dark' : 'light';
+    // The browser chrome takes the header's colour, which is --blue per theme.
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', data.settings.theme === 'dark' ? '#101b28' : '#1E3A5F');
+    if (meta) meta.setAttribute('content', theme.dark ? '#101b28' : theme.swatch[0]);
   }, [data.settings.theme]);
 
   if (loading) {

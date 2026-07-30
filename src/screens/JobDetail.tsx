@@ -32,7 +32,7 @@ import {
   suggestedQuote,
   totalHours,
 } from '../lib/calc';
-import { gbp, gbp2, hoursLabel, fmtDate, fmtDateTime, todayISO } from '../lib/format';
+import { gbp, gbp2, hoursLabel, fmtDate, deadlineISO, todayISO } from '../lib/format';
 
 export function JobDetail() {
   const { id } = useParams();
@@ -857,7 +857,7 @@ function TaskRow({ task, onToggle, onRemove }: { task: JobTask; onToggle: () => 
         </div>
         <div className="tiny">
           {task.category}
-          {task.deadline ? ` · ${fmtDateTime(task.deadline)}` : ''}
+          {task.deadline ? ` · ${fmtDate(task.deadline)}` : ''}
         </div>
       </span>
       <button className="btn-icon" onClick={onRemove}>
@@ -879,7 +879,7 @@ function TaskForm({ onClose, onAdd }: { onClose: () => void; onAdd: (t: JobTask)
       title: title.trim(),
       category,
       priority,
-      deadline: deadline ? new Date(deadline).toISOString() : undefined,
+      deadline: deadline ? deadlineISO(deadline) : undefined,
       done: false,
     });
     onClose();
@@ -908,7 +908,10 @@ function TaskForm({ onClose, onAdd }: { onClose: () => void; onAdd: (t: JobTask)
           </div>
         </Field>
         <Field label="Deadline">
-          <input className="input" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          {/* A date, not a datetime. A task is due on a day; the minute
+              was never chosen, it was whatever the picker happened to open on,
+              and it read back as "due 16:07" for no reason. */}
+          <input className="input" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </Field>
       </div>
       <div className="sheet-actions">

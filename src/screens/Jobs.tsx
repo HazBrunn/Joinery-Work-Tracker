@@ -12,7 +12,7 @@ import {
   newQuote,
 } from '../types';
 import { uid } from '../lib/id';
-import { clientById, outstandingTotal, receivedTotal } from '../lib/calc';
+import { clientById, lastPaymentDate, outstandingTotal, receivedTotal } from '../lib/calc';
 import { gbp, fmtDate } from '../lib/format';
 
 type ViewMode = 'board' | 'list';
@@ -32,7 +32,9 @@ export function Jobs() {
       .filter((j) => (statusFilter === 'all' ? true : j.status === statusFilter))
       .filter((j) => (categoryFilter === 'all' ? true : j.category === categoryFilter))
       .filter((j) => (q ? j.title.toLowerCase().includes(q) : true))
-      .sort((a, b) => (a.dateAdded < b.dateAdded ? 1 : -1));
+      // Most recently paid first — see lastPaymentDate. Back-filling a job
+      // from last spring should not float it to the top of the list.
+      .sort((a, b) => (lastPaymentDate(a) < lastPaymentDate(b) ? 1 : -1));
   }, [data.jobs, statusFilter, categoryFilter, search]);
 
   const categories = useMemo(() => {
