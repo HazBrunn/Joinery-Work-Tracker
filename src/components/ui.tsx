@@ -87,7 +87,15 @@ export function Sheet({
     >
       <div className="sheet" role="dialog" aria-modal="true">
         <div className="sheet-handle" />
-        <h2>{title}</h2>
+        {/* A tall sheet can fill the screen, and then the only way out was to
+            find the strip of backdrop above it. Every sheet gets a way out that
+            is always where you left it. */}
+        <div className="row between" style={{ gap: 10, alignItems: 'flex-start' }}>
+          <h2 className="grow">{title}</h2>
+          <button className="btn-icon" onClick={onClose} aria-label="Close" title="Close" style={{ flex: '0 0 auto' }}>
+            ✕
+          </button>
+        </div>
         {children}
       </div>
     </div>

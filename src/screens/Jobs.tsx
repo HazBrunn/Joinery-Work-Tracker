@@ -216,8 +216,15 @@ function JobCard({
 }) {
   const outstanding = outstandingTotal(job);
   const received = receivedTotal(job);
+  // Only a real payment date; lastPaymentDate falls back to dateAdded, which
+  // would make an unpaid job claim to have been paid.
+  const paidOn = job.stagePayments
+    .filter((p) => p.received && p.receivedDate)
+    .map((p) => p.receivedDate!)
+    .sort()
+    .pop();
   return (
-    <button className="list-row" onClick={onOpen}>
+    <button className="list-row wrap" onClick={onOpen}>
       <span className="grow">
         <div className="row between">
           <div className="title">{job.title}</div>
@@ -234,7 +241,12 @@ function JobCard({
               {gbp(outstanding)} due
             </span>
           )}
-          <span className="tiny">{fmtDate(job.dateAdded)}</span>
+          {/* The date the list is sorted by, and it says which date it is —
+              "30 Jul" on a job finished in March, meaning the morning it was
+              typed in, is worse than no date at all. */}
+          <span className="tiny">
+            {paidOn ? `Paid ${fmtDate(paidOn)}` : `Added ${fmtDate(job.dateAdded)}`}
+          </span>
         </div>
       </span>
     </button>
