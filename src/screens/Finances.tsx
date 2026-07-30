@@ -6,6 +6,7 @@ import { useData } from '../store/DataContext';
 import { Expense, ExpenseCategory, EXPENSE_CATEGORIES } from '../types';
 import { uid } from '../lib/id';
 import { allIncome, outstandingTotal } from '../lib/calc';
+import { jobLabel, jobWithClient } from '../lib/labels';
 import { gbp, fmtDate, todayISO } from '../lib/format';
 
 type Tab = 'out' | 'in';
@@ -152,16 +153,16 @@ export function Finances() {
               {expenses.map((e) => {
                 const job = data.jobs.find((j) => j.id === e.linkedJobId);
                 return (
-                  <button key={e.id} className="list-row" onClick={() => setEditing(e)}>
+                  <button key={e.id} className="list-row wrap" onClick={() => setEditing(e)}>
                     <span className="grow">
                       <div className="title">{e.description || e.category}</div>
                       <div className="subtitle">
                         {e.category} · {e.supplier || 'No supplier'}
-                        {job ? ` · ${job.title}` : ' · Overhead'}
+                        {job ? ` · ${jobWithClient(data, job)}` : ' · Overhead'}
                       </div>
                       <div className="tiny">{fmtDate(e.date)}</div>
                     </span>
-                    <span className="mono text-red" style={{ fontWeight: 700 }}>
+                    <span className="mono text-red" style={{ fontWeight: 700, flex: '0 0 auto' }}>
                       −{gbp(e.amount)}
                     </span>
                   </button>
@@ -203,21 +204,21 @@ function IncomeTab({
   return (
     <>
       <p className="muted" style={{ marginTop: 0 }}>
-        Income is pulled automatically from the stage payments you mark received on each job.
+        Income is pulled automatically from the payments you mark received on each job.
       </p>
 
       {income.length === 0 ? (
-        <EmptyState emoji="🪙" title="No income yet" hint="Mark stage payments as received inside a job." />
+        <EmptyState emoji="🪙" title="No income yet" hint="Mark payments as received inside a job." />
       ) : (
         <div className="list-grid">
           {income.map((r) => (
-            <button key={r.id} className="list-row" onClick={() => navigate(`/jobs/${r.jobId}`)}>
+            <button key={r.id} className="list-row wrap" onClick={() => navigate(`/jobs/${r.jobId}`)}>
               <span className="grow">
                 <div className="title">{r.milestone}</div>
-                <div className="subtitle">{r.jobTitle}</div>
+                <div className="subtitle">{jobWithClient(data, data.jobs.find((j) => j.id === r.jobId))}</div>
                 <div className="tiny">{fmtDate(r.date)}</div>
               </span>
-              <span className="mono text-green" style={{ fontWeight: 700 }}>
+              <span className="mono text-green" style={{ fontWeight: 700, flex: '0 0 auto' }}>
                 +{gbp(r.amount)}
               </span>
             </button>
@@ -230,12 +231,12 @@ function IncomeTab({
           <div className="section-title">Outstanding — still owed</div>
           <div className="stack">
             {outstandingByJob.map(({ job, out }) => (
-              <button key={job.id} className="list-row" onClick={() => navigate(`/jobs/${job.id}`)}>
+              <button key={job.id} className="list-row wrap" onClick={() => navigate(`/jobs/${job.id}`)}>
                 <span className="grow">
-                  <div className="title">{job.title}</div>
+                  <div className="title">{jobWithClient(data, job)}</div>
                   <div className="subtitle">Agreed {gbp(job.agreedPrice ?? 0)}</div>
                 </span>
-                <span className="mono text-amber" style={{ fontWeight: 700 }}>
+                <span className="mono text-amber" style={{ fontWeight: 700, flex: '0 0 auto' }}>
                   {gbp(out)}
                 </span>
               </button>
@@ -262,6 +263,18 @@ export function ExpenseForm({ existing, onClose }: { existing?: Expense; onClose
   );
   const set = (patch: Partial<Expense>) => setForm((f) => ({ ...f, ...patch }));
 
+  // Suppliers you have used before, the most-used first. Typing "How" should
+  // find Howdens rather than making you spell it again — and consistent
+  // spelling is what makes the category totals mean anything.
+  const suppliers = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of data.expenses) {
+      const name = e.supplier?.trim();
+      if (name) counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n);
+  }, [data.expenses]);
+
   const save = () => {
     if (!form.amount) return;
     update((draft) => {
@@ -282,12 +295,13 @@ export function ExpenseForm({ existing, onClose }: { existing?: Expense; onClose
     <Sheet title={existing ? 'Edit expense' : 'Log expense'} onClose={onClose}>
       <div className="stack">
         <div className="field-row">
+          {/* No autoFocus: opening the sheet threw the keyboard up over half of
+              it before you had decided what you were logging. */}
           <Field label="Amount (£)">
             <input
               className="input"
               type="number"
               inputMode="decimal"
-              autoFocus
               value={form.amount || ''}
               onChange={(e) => set({ amount: +e.target.value })}
             />
@@ -314,18 +328,30 @@ export function ExpenseForm({ existing, onClose }: { existing?: Expense; onClose
             onChange={(e) => set({ linkedJobId: e.target.value || null })}
           >
             <option value="">— Overhead (no job) —</option>
+            {/* Titles repeat across clients, so the client's initials come too:
+                three jobs called "Fitted Wardrobes" are otherwise the same
+                option three times. */}
             {data.jobs.map((j) => (
               <option key={j.id} value={j.id}>
-                {j.title}
+                {jobLabel(data, j)}
               </option>
             ))}
           </select>
         </Field>
-        <div className="field-row">
-          <Field label="Supplier">
-            <input className="input" value={form.supplier} onChange={(e) => set({ supplier: e.target.value })} />
-          </Field>
-        </div>
+        <Field label="Supplier">
+          <input
+            className="input"
+            list="supplier-suggestions"
+            autoComplete="off"
+            value={form.supplier}
+            onChange={(e) => set({ supplier: e.target.value })}
+          />
+          <datalist id="supplier-suggestions">
+            {suppliers.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </Field>
         <Field label="Description">
           <input className="input" value={form.description} onChange={(e) => set({ description: e.target.value })} />
         </Field>

@@ -6,7 +6,7 @@ import { useData } from '../store/DataContext';
 import {
   Job,
   JobStatus,
-  JOB_CATEGORIES,
+  jobCategoriesOf,
   JOB_STATUSES,
   LEAD_SOURCES,
   newQuote,
@@ -37,8 +37,8 @@ export function Jobs() {
 
   const categories = useMemo(() => {
     const used = new Set(data.jobs.map((j) => j.category));
-    return JOB_CATEGORIES.filter((c) => used.has(c));
-  }, [data.jobs]);
+    return jobCategoriesOf(data.settings).filter((c) => used.has(c));
+  }, [data.jobs, data.settings]);
 
   return (
     <Screen
@@ -252,7 +252,7 @@ export function NewJobForm({
   const { data, update } = useData();
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState<string>(presetClientId ?? data.clients[0]?.id ?? '');
-  const [category, setCategory] = useState(JOB_CATEGORIES[0]);
+  const [category, setCategory] = useState(jobCategoriesOf(data.settings)[0]);
   const [leadSource, setLeadSource] = useState(LEAD_SOURCES[0]);
   const [status, setStatus] = useState<JobStatus>('lead_in');
 
@@ -309,7 +309,7 @@ export function NewJobForm({
         <div className="field-row">
           <Field label="Category">
             <select className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
-              {JOB_CATEGORIES.map((c) => (
+              {jobCategoriesOf(data.settings).map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>

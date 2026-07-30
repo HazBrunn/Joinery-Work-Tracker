@@ -4,6 +4,7 @@ import { Screen } from '../components/Screen';
 import { EmptyState, Field, PriorityDot, Sheet } from '../components/ui';
 import { useData } from '../store/DataContext';
 import { CalendarBlock, Job } from '../types';
+import { jobWithClient } from '../lib/labels';
 import { uid } from '../lib/id';
 import {
   dateKey,
@@ -84,9 +85,9 @@ export function Calendar() {
           kind: 'visit',
           date: dateKey(new Date(job.visitDate)),
           datetime: job.visitDate,
-          title: `Quote visit — ${job.title}`,
+          title: `Quote visit — ${jobWithClient(data, job)}`,
           jobId: job.id,
-          jobTitle: job.title,
+          jobTitle: jobWithClient(data, job),
           color: KIND_COLOR.visit,
         });
       }
@@ -99,7 +100,9 @@ export function Calendar() {
           datetime: t.deadline,
           title: t.title,
           jobId: job.id,
-          jobTitle: job.title,
+          // Whose job it is, not just which job: "Order hinges · Fitted
+          // Wardrobes" is three different tasks when three clients want them.
+          jobTitle: jobWithClient(data, job),
           priority: t.priority,
           done: t.done,
           color: KIND_COLOR.task,
@@ -122,7 +125,7 @@ export function Calendar() {
           date: day,
           title: b.label,
           jobId: b.jobId,
-          jobTitle: data.jobs.find((j) => j.id === b.jobId)?.title,
+          jobTitle: jobWithClient(data, data.jobs.find((j) => j.id === b.jobId)),
           color: KIND_COLOR[b.type],
           blockId: b.id,
           spanStart: b.startDate,

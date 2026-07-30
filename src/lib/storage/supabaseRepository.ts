@@ -148,6 +148,11 @@ export class SupabaseRepository implements Repository {
             defaultDayRate: num(settings.data.default_day_rate, DEFAULT_SETTINGS.defaultDayRate),
             workingHoursPerDay: num(settings.data.working_hours_per_day, DEFAULT_SETTINGS.workingHoursPerDay),
             businessName: settings.data.business_name ?? DEFAULT_SETTINGS.businessName,
+            // An empty column means the account predates this setting, not that
+            // the list was emptied — fall back to the seed rather than to none.
+            jobCategories: settings.data.job_categories?.length
+              ? settings.data.job_categories
+              : [...DEFAULT_SETTINGS.jobCategories],
           }
         : { ...DEFAULT_SETTINGS },
     };
@@ -171,7 +176,17 @@ export class SupabaseRepository implements Repository {
       })),
     };
     const { error } = await supabase.rpc('save_state', { p_doc: payload });
-    if (error) console.error('Supabase save failed', error);
+    if (error) { console.error('Supabase save failed', error); return; }
+
+    // Written separately because save_state names the settings columns it
+    // writes and this isn't one of them — which is deliberate: adding a column
+    // that way needs no change to a function holding real business records.
+    // After the save, so the settings row is certain to exist.
+    const { error: catErr } = await supabase
+      .from('settings')
+      .update({ job_categories: data.settings.jobCategories ?? [] })
+      .eq('user_id', (await supabase.auth.getUser()).data?.user?.id ?? '');
+    if (catErr) console.error('Supabase job categories save failed', catErr);
   }
 
   async uploadImage(file: File, jobId: string): Promise<string> {

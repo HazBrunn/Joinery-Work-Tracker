@@ -19,7 +19,9 @@ export const JOB_STATUSES: { value: JobStatus; label: string; icon: string; colo
   { value: 'rejected', label: 'Rejected', icon: '✗', color: '#C0504D' },
 ];
 
-// Job categories — seedable, but a sensible default list per the blueprint.
+// The starting list. Once the app has run, the live list lives in
+// settings.jobCategories and is editable — this is only what a new account
+// begins with, and the fallback if that list is ever empty.
 export const JOB_CATEGORIES = [
   'Fitted Wardrobes',
   'Alcove Units',
@@ -195,6 +197,8 @@ export interface Settings {
   defaultDayRate: number; // £
   workingHoursPerDay: number; // capacity per day
   businessName: string;
+  /** The categories a job can be filed under. Editable; JOB_CATEGORIES is the seed. */
+  jobCategories: string[];
 }
 
 export interface AppData {
@@ -210,7 +214,13 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultDayRate: 275,
   workingHoursPerDay: 8,
   businessName: 'My Joinery',
+  jobCategories: [...JOB_CATEGORIES],
 };
+
+/** The live category list, falling back to the seed if it has been emptied. */
+export function jobCategoriesOf(settings: Settings): string[] {
+  return settings.jobCategories?.length ? settings.jobCategories : JOB_CATEGORIES;
+}
 
 export function emptyData(): AppData {
   return {

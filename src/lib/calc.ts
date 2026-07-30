@@ -223,19 +223,24 @@ export interface NextDeadline {
 }
 
 export function nextDeadline(data: AppData): NextDeadline | null {
+  return nextDeadlines(data, 1)[0] ?? null;
+}
+
+/** The next `count` deadlines still ahead, soonest first. */
+export function nextDeadlines(data: AppData, count: number): NextDeadline[] {
   const now = Date.now();
-  let best: NextDeadline | null = null;
+  const out: NextDeadline[] = [];
   for (const job of data.jobs) {
     for (const t of job.tasks) {
       if (t.done || !t.deadline) continue;
       const ts = new Date(t.deadline).getTime();
       if (isNaN(ts) || ts < now) continue;
-      if (!best || ts < new Date(best.deadline).getTime()) {
-        best = { jobId: job.id, jobTitle: job.title, taskTitle: t.title, deadline: t.deadline };
-      }
+      out.push({ jobId: job.id, jobTitle: job.title, taskTitle: t.title, deadline: t.deadline });
     }
   }
-  return best;
+  return out
+    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+    .slice(0, count);
 }
 
 export function clientById(data: AppData, id: string | null) {

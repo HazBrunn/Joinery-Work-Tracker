@@ -1,6 +1,6 @@
 // Demo data — gives a realistic, populated app on first run. Users can clear it
 // from Settings. Dates are generated relative to "today" so it always looks current.
-import { AppData, Job, newQuote } from '../types';
+import { AppData, DEFAULT_SETTINGS, Job, newQuote } from '../types';
 import { uid } from './id';
 import { dateKey } from './format';
 
@@ -223,11 +223,6 @@ export function seedData(): AppData {
     jobs,
     expenses,
     calendarBlocks,
-    settings: {
-      theme: 'light',
-      defaultDayRate: 275,
-      workingHoursPerDay: 8,
-      businessName: 'My Joinery',
-    },
+    settings: { ...DEFAULT_SETTINGS },
   };
 }

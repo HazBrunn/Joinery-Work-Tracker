@@ -7,7 +7,8 @@ import {
   Job,
   JobStatus,
   JobTask,
-  JOB_CATEGORIES,
+  StagePayment,
+  jobCategoriesOf,
   JOB_STATUSES,
   Priority,
   PRIORITIES,
@@ -184,6 +185,8 @@ export function JobDetail() {
 
 // ── Edit header (title/category/leadsource/visit) ────────────────────────────
 function EditHeaderButton({ job, updateJob }: { job: Job; updateJob: (m: (j: Job) => void) => void }) {
+  const { data } = useData();
+  const categories = jobCategoriesOf(data.settings);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(job.title);
   const [category, setCategory] = useState(job.category);
@@ -210,7 +213,9 @@ function EditHeaderButton({ job, updateJob }: { job: Job; updateJob: (m: (j: Job
             </Field>
             <Field label="Category">
               <select className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
-                {JOB_CATEGORIES.map((c) => (
+                {/* The job's own category is listed even if it has since been
+                    removed, so opening this doesn't silently re-file the job. */}
+                {[...new Set([...categories, category].filter(Boolean))].map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
@@ -426,74 +431,131 @@ function StagePaymentsSection({ job, updateJob }: { job: Job; updateJob: (m: (j:
           : p,
       );
     });
+  const setReceivedDate = (id: string, date: string) =>
+    updateJob((j) => {
+      j.stagePayments = j.stagePayments.map((p) => (p.id === id ? { ...p, receivedDate: date } : p));
+    });
   const remove = (id: string) =>
     updateJob((j) => {
       j.stagePayments = j.stagePayments.filter((p) => p.id !== id);
     });
 
+  // "Payments", not "Stage payments": most jobs are paid once, and the section
+  // covers both. The field keeps its name; only the wording changed.
   return (
-    <Collapsible icon="💷" title="Stage Payments" subtitle={job.stagePayments.length ? gbp(total) : ''}>
+    <Collapsible icon="💷" title="Payments" subtitle={job.stagePayments.length ? gbp(total) : ''}>
       <p className="muted" style={{ marginTop: 0 }}>
-        Break the price into milestone payments. Tick each as it lands.
+        One payment or several. Tick each as it lands, and correct the date if it landed earlier.
       </p>
       <div className="stack-sm">
         {job.stagePayments.map((p) => (
-          <div key={p.id} className="card pad" style={{ background: 'var(--surface-2)' }}>
-            <input
-              className="input"
-              placeholder="Milestone (e.g. Deposit on acceptance)"
-              value={p.milestone}
-              onChange={(e) => setStage(p.id, { milestone: e.target.value })}
-              style={{ marginBottom: 8 }}
-            />
-            <div className="row" style={{ gap: 8 }}>
-              <Field label="Amount £">
-                <input
-                  className="input"
-                  type="number"
-                  inputMode="decimal"
-                  value={p.amount || ''}
-                  onChange={(e) => setStage(p.id, { amount: +e.target.value })}
-                />
-              </Field>
-              <button
-                className={`btn sm ${p.received ? 'amber' : 'ghost'}`}
-                style={{ alignSelf: 'flex-end' }}
-                onClick={() => toggleReceived(p.id)}
-              >
-                {p.received ? `✓ Received ${p.receivedDate ? fmtDate(p.receivedDate) : ''}` : 'Mark received'}
-              </button>
-              <button className="btn-icon" style={{ alignSelf: 'flex-end' }} onClick={() => remove(p.id)}>
-                ✕
-              </button>
-            </div>
-          </div>
+          <PaymentRow
+            key={p.id}
+            payment={p}
+            onSet={(patch) => setStage(p.id, patch)}
+            onToggle={() => toggleReceived(p.id)}
+            onDate={(d) => setReceivedDate(p.id, d)}
+            onRemove={() => remove(p.id)}
+          />
         ))}
         <button className="btn sm" onClick={add}>
-          + Add stage payment
+          + Add payment
         </button>
       </div>
 
       {job.stagePayments.length > 0 && (
         <>
           <div className="summary-line total" style={{ marginTop: 12 }}>
-            <span>Stages total</span>
+            <span>Payments total</span>
             <span className="mono">{gbp(total)}</span>
           </div>
           {mismatch && (
             <div className="callout warn" style={{ marginTop: 8 }}>
-              ⚠️ Stages total {gbp(total)} but the agreed price is {gbp(job.agreedPrice!)}. Adjust the stages
-              or the agreed figure so they reconcile.
+              ⚠️ Payments total {gbp(total)} but the agreed price is {gbp(job.agreedPrice!)}. Adjust the
+              payments or the agreed figure so they reconcile.
             </div>
           )}
           {!mismatch && job.agreedPrice != null && (
             <div className="callout ok" style={{ marginTop: 8 }}>
-              ✓ Stages reconcile with the agreed price.
+              ✓ Payments reconcile with the agreed price.
             </div>
           )}
         </>
       )}
     </Collapsible>
+  );
+}
+
+// One payment. The date is only editable once it has been received, because
+// until then there is no date to be wrong — marking it received sets today, and
+// the pencil is there for when the money actually landed last Thursday.
+function PaymentRow({
+  payment: p,
+  onSet,
+  onToggle,
+  onDate,
+  onRemove,
+}: {
+  payment: StagePayment;
+  onSet: (patch: Partial<{ milestone: string; amount: number }>) => void;
+  onToggle: () => void;
+  onDate: (date: string) => void;
+  onRemove: () => void;
+}) {
+  const [editingDate, setEditingDate] = useState(false);
+  return (
+    <div className="card pad" style={{ background: 'var(--surface-2)' }}>
+      <input
+        className="input"
+        placeholder="What for (e.g. Deposit on acceptance)"
+        value={p.milestone}
+        onChange={(e) => onSet({ milestone: e.target.value })}
+        style={{ marginBottom: 8 }}
+      />
+      <div className="row" style={{ gap: 8, alignItems: 'flex-end' }}>
+        <Field label="Amount £">
+          <input
+            className="input"
+            type="number"
+            inputMode="decimal"
+            value={p.amount || ''}
+            onChange={(e) => onSet({ amount: +e.target.value })}
+          />
+        </Field>
+        <button className={`btn sm ${p.received ? 'amber' : 'ghost'}`} onClick={onToggle} style={{ flex: 1, minWidth: 0 }}>
+          {p.received ? `✓ ${p.receivedDate ? fmtDate(p.receivedDate) : 'Received'}` : 'Mark received'}
+        </button>
+        {/* Stacked, so a narrow row keeps both within the card. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '0 0 auto' }}>
+          {p.received && (
+            <button className="btn-icon" title="Change the date received" onClick={() => setEditingDate((v) => !v)}>
+              ✎
+            </button>
+          )}
+          <button className="btn-icon" title="Delete this payment" onClick={onRemove}>
+            ✕
+          </button>
+        </div>
+      </div>
+      {p.received && editingDate && (
+        <div style={{ marginTop: 8 }}>
+          <Field label="Date received">
+            <input
+              className="input"
+              type="date"
+              value={p.receivedDate ?? todayISO()}
+              max={todayISO()}
+              onChange={(e) => {
+                if (e.target.value) {
+                  onDate(e.target.value);
+                  setEditingDate(false);
+                }
+              }}
+            />
+          </Field>
+        </div>
+      )}
+    </div>
   );
 }
 

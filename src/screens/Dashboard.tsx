@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart } from '../components/ui';
 import { useData } from '../store/DataContext';
-import { dashboardMetrics, nextDeadline } from '../lib/calc';
+import { dashboardMetrics, nextDeadlines } from '../lib/calc';
+import { jobWithClient } from '../lib/labels';
 import { gbp, fmtDateTime, relativeDeadline } from '../lib/format';
 import { NewJobForm } from './Jobs';
 import { ClientForm } from './Clients';
@@ -12,7 +13,7 @@ export function Dashboard() {
   const { data } = useData();
   const navigate = useNavigate();
   const metrics = useMemo(() => dashboardMetrics(data), [data]);
-  const deadline = useMemo(() => nextDeadline(data), [data]);
+  const deadlines = useMemo(() => nextDeadlines(data, 3), [data]);
   const [sheet, setSheet] = useState<null | 'job' | 'client' | 'expense'>(null);
 
   const greeting = greetingFor(new Date());
@@ -78,29 +79,37 @@ export function Dashboard() {
             <BarChart data={metrics.trend.map((t) => ({ label: t.label, value: t.income }))} format={(n) => gbp(n)} />
           </div>
 
-          {/* Next deadline */}
-          {deadline && (
-            <button
-              className="card pad row between"
-              style={{ width: '100%', textAlign: 'left' }}
-              onClick={() => navigate(`/jobs/${deadline.jobId}`)}
-            >
-              <span className="grow">
-                <div className="section-title" style={{ margin: 0 }}>
-                  Next deadline
-                </div>
-                <div style={{ fontWeight: 700, marginTop: 4 }}>{deadline.taskTitle}</div>
-                <div className="tiny">
-                  {deadline.jobTitle} · {fmtDateTime(deadline.deadline)}
-                </div>
-              </span>
-              <span
-                className={`pill ${relativeDeadline(deadline.deadline).overdue ? 'text-red' : ''}`}
-                style={{ fontWeight: 700 }}
-              >
-                {relativeDeadline(deadline.deadline).text}
-              </span>
-            </button>
+          {/* What's coming. Three rather than one: knowing only the very next
+              thing tells you nothing about whether this week is busy. */}
+          {deadlines.length > 0 && (
+            <div className="card pad">
+              <div className="section-title" style={{ margin: '0 0 8px' }}>
+                {deadlines.length > 1 ? 'Next deadlines' : 'Next deadline'}
+              </div>
+              <div className="stack-sm">
+                {deadlines.map((d) => {
+                  const rel = relativeDeadline(d.deadline);
+                  return (
+                    <button
+                      key={`${d.jobId}-${d.deadline}-${d.taskTitle}`}
+                      className="row between"
+                      style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, gap: 10, color: 'var(--text)' }}
+                      onClick={() => navigate(`/jobs/${d.jobId}`)}
+                    >
+                      <span className="grow" style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700 }}>{d.taskTitle}</div>
+                        <div className="tiny" style={{ overflowWrap: 'anywhere' }}>
+                          {jobWithClient(data, data.jobs.find((j) => j.id === d.jobId))} · {fmtDateTime(d.deadline)}
+                        </div>
+                      </span>
+                      <span className={`pill ${rel.overdue ? 'text-red' : ''}`} style={{ fontWeight: 700, flex: '0 0 auto' }}>
+                        {rel.text}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* Rate by category */}

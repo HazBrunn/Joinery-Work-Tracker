@@ -359,8 +359,22 @@ a {
   display: flex;
   gap: 10px;
 }
+/* flex: 1 alone leaves min-width at auto, so a control with an intrinsic width
+   — a date picker is the usual culprit — refuses to shrink and pushes the row
+   past the edge of the screen. */
 .field-row > * {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Safari gives date and time inputs a width of their own that ignores
+   width: 100%, which is what took the expense form off the right-hand side. */
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* ── Badges & pills ─────────────────────────────────────────────────────────*/
@@ -524,6 +538,14 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Rows that would rather be two lines than a truncated one. A job title with a
+   client's name on it is worth reading in full. */
+.list-row.wrap .title,
+.list-row.wrap .subtitle {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
 }
 .list-row .chev {
   color: var(--text-3);
@@ -835,6 +857,14 @@ a {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+}
+/* A grid or flex child sizes to its content by default, so one unbreakable row
+   widens the whole column and takes the page off the side of the screen with
+   it. This is what made a long job name scroll the finances list sideways. */
+.list-grid > *,
+.stack > *,
+.stack-sm > * {
+  min-width: 0;
 }
 .panel-grid {
   display: flex;

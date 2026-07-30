@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { Screen } from '../components/Screen';
-import { Field } from '../components/ui';
+import { Field, Sheet } from '../components/ui';
 import { useData } from '../store/DataContext';
+import { jobCategoriesOf } from '../types';
 import { gbp2 } from '../lib/format';
 import { describe, exportBackup, parseBackup, summarise } from '../lib/backup';
 import type { Account } from '../App';
@@ -16,6 +17,7 @@ export function SettingsScreen({ onSignOut, authUser }: Props) {
   const s = data.settings;
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [catsOpen, setCatsOpen] = useState(false);
 
   // Restore is the one action here that can destroy a morning's work, so it
   // states both sides of the trade in the confirm and refuses anything it
@@ -93,7 +95,19 @@ export function SettingsScreen({ onSignOut, authUser }: Props) {
           {gbp2(s.defaultDayRate / (s.workingHoursPerDay || 8))}/hour · used as the default on new jobs and for
           day↔hour conversion and capacity planning.
         </p>
+        <div className="divider" />
+        <div className="summary-line" style={{ padding: 0 }}>
+          <span className="muted">Job categories</span>
+          <button className="btn sm" onClick={() => setCatsOpen(true)}>
+            {jobCategoriesOf(s).length} · Edit
+          </button>
+        </div>
+        <p className="tiny" style={{ margin: 0 }}>
+          What kinds of work you take on. Used on every job, and to break down effective £/day by category.
+        </p>
       </div>
+
+      {catsOpen && <JobCategoriesSheet onClose={() => setCatsOpen(false)} />}
 
       {authUser && (
         <>
@@ -191,5 +205,105 @@ export function SettingsScreen({ onSignOut, authUser }: Props) {
         Joinery Jobs Tracker · v1.0 · built from the v2 blueprint
       </p>
     </Screen>
+  );
+}
+
+// ── Job categories ───────────────────────────────────────────────────────────
+// Renaming carries the jobs with it: a category is only a label, and the jobs
+// wearing it did not change. Deleting deliberately does not — it leaves the
+// jobs where they are and simply stops offering the name, because silently
+// re-filing someone's finished kitchen as "Other" is not a tidy-up.
+function JobCategoriesSheet({ onClose }: { onClose: () => void }) {
+  const { data, update, updateSettings } = useData();
+  const categories = jobCategoriesOf(data.settings);
+  const [adding, setAdding] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+
+  const inUse = (name: string) => data.jobs.filter((j) => j.category === name).length;
+
+  const add = () => {
+    const n = adding.trim();
+    if (!n || categories.includes(n)) return;
+    updateSettings({ jobCategories: [...categories, n] });
+    setAdding('');
+  };
+  const rename = (from: string) => {
+    const to = draft.trim();
+    setEditing(null);
+    if (!to || to === from || categories.includes(to)) return;
+    update((d) => {
+      d.settings = { ...d.settings, jobCategories: categories.map((c) => (c === from ? to : c)) };
+      d.jobs = d.jobs.map((j) => (j.category === from ? { ...j, category: to } : j));
+    });
+  };
+  const remove = (name: string) => updateSettings({ jobCategories: categories.filter((c) => c !== name) });
+
+  return (
+    <Sheet title="Job categories" onClose={onClose}>
+      <div className="stack-sm">
+        {categories.map((c) => {
+          const used = inUse(c);
+          return (
+            <div key={c} className="card pad" style={{ background: 'var(--surface-2)' }}>
+              {editing === c ? (
+                <div className="row" style={{ gap: 8 }}>
+                  <input
+                    className="input"
+                    autoFocus
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') rename(c);
+                      if (e.key === 'Escape') setEditing(null);
+                    }}
+                  />
+                  <button className="btn sm primary" onClick={() => rename(c)}>
+                    Save
+                  </button>
+                </div>
+              ) : (
+                <div className="row between" style={{ gap: 8 }}>
+                  <span className="grow">
+                    <div style={{ fontWeight: 600 }}>{c}</div>
+                    <div className="tiny">{used ? `${used} job${used === 1 ? '' : 's'}` : 'Not used yet'}</div>
+                  </span>
+                  <button
+                    className="btn-icon"
+                    title="Rename"
+                    onClick={() => {
+                      setEditing(c);
+                      setDraft(c);
+                    }}
+                  >
+                    ✎
+                  </button>
+                  <button className="btn-icon" title="Remove from the list" onClick={() => remove(c)}>
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="row" style={{ gap: 8, marginTop: 12 }}>
+        <input
+          className="input"
+          placeholder="New category"
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+        />
+        <button className="btn sm primary" onClick={add} disabled={!adding.trim()}>
+          Add
+        </button>
+      </div>
+      <p className="tiny" style={{ marginTop: 10 }}>
+        Renaming updates every job using it. Removing one leaves those jobs alone — they keep the category
+        they have, it just stops being offered on new work.
+      </p>
+    </Sheet>
   );
 }
