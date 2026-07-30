@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['apple-touch-icon.png', 'icon-192.png'],
       manifest: {
         name: 'Joinery Jobs Tracker',
         short_name: 'Joinery',

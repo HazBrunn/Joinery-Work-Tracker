@@ -16,7 +16,7 @@ export function Sidebar({ onSignOut }: { onSignOut?: () => Promise<void> }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <img className="logo" src="./favicon.svg" alt="" />
+        <img className="logo" src="./icon-192.png" alt="" />
         <span>{data.settings.businessName || 'Joinery'}</span>
       </div>
       <nav className="sidebar-nav">

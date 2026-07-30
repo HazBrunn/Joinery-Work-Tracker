@@ -38,7 +38,7 @@ function SupabaseLogin() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <img src="./favicon.svg" alt="" className="login-logo" />
+          <img src="./icon-192.png" alt="" className="login-logo" />
           <h1>Joinery Tracker</h1>
           <p className="muted">Your private business workspace</p>
         </div>
@@ -97,7 +97,7 @@ function GoogleLogin() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <img src="./favicon.svg" alt="" className="login-logo" />
+          <img src="./icon-192.png" alt="" className="login-logo" />
           <h1>Joinery Tracker</h1>
           <p className="muted">Your private business workspace</p>
         </div>
