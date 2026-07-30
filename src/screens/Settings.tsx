@@ -4,11 +4,11 @@ import { Field } from '../components/ui';
 import { useData } from '../store/DataContext';
 import { gbp2 } from '../lib/format';
 import { describe, exportBackup, parseBackup, summarise } from '../lib/backup';
-import type { User } from '@supabase/supabase-js';
+import type { Account } from '../App';
 
 interface Props {
   onSignOut?: () => Promise<void>;
-  authUser: User | null;
+  authUser: Account | null;
 }
 
 export function SettingsScreen({ onSignOut, authUser }: Props) {

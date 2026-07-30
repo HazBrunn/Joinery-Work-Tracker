@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import type { User } from '@supabase/supabase-js';
-import { supabase, supabaseConfigured, signOutUser } from './lib/supabase';
+import { supabase, supabaseConfigured, signOutUser as signOutSupabase } from './lib/supabase';
+import { firebaseConfigured, getFirebase, onAuthStateChanged, signOutUser as signOutFirebase } from './lib/firebase';
 import { DataProvider } from './store/DataContext';
 import { useData } from './store/DataContext';
 import { BottomNav } from './components/BottomNav';
@@ -16,35 +16,61 @@ import { Calendar } from './screens/Calendar';
 import { Finances } from './screens/Finances';
 import { SettingsScreen } from './screens/Settings';
 
-// True when the Supabase backend is active (baked in at build time by Vite).
-// Without it the app runs on local storage with no sign-in, which is what makes
-// a checkout with no environment still usable.
-const USE_SUPABASE = import.meta.env.VITE_DATA_BACKEND === 'supabase' && supabaseConfigured();
+// Which backend is active, baked in at build time by Vite. Without either, the
+// app runs on local storage with no sign-in, which is what makes a checkout
+// with no environment still usable.
+//
+// Both are supported for the length of the move to Supabase: the Firebase
+// backend has to stay readable until its data is across and verified. Once it
+// is, everything Firebase here can go.
+const BACKEND = import.meta.env.VITE_DATA_BACKEND;
+const USE_SUPABASE = BACKEND === 'supabase' && supabaseConfigured();
+const USE_FIREBASE = BACKEND === 'firebase' && firebaseConfigured();
+const NEEDS_AUTH = USE_SUPABASE || USE_FIREBASE;
 
-// There is no owner allow-list any more. Every row carries a user_id and the
-// RLS policy on it is the boundary, so another account signing in gets its own
-// empty tracker rather than a rejection screen — and, more to the point, cannot
-// read a single client, quote or margin belonging to anyone else.
+// The owner's Firebase UID, kept for the Firebase path only. On Supabase there
+// is no allow-list and none is needed: every row carries a user_id and the RLS
+// policy on it is the boundary, so another account signing in gets its own
+// empty tracker and cannot read a client, a quote or a margin either way.
+const OWNER_UID = import.meta.env.VITE_OWNER_UID || 'Zzrd3zL0gNQI1DsT263Dw8qfFKg1';
+
+/** The bit of a signed-in user the app actually uses, from either provider. */
+export interface Account {
+  id: string;
+  email?: string;
+}
 
 export default function App() {
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  // If Supabase isn't in use, skip the auth check entirely.
-  const [authChecked, setAuthChecked] = useState(!USE_SUPABASE);
+  const [authUser, setAuthUser] = useState<Account | null>(null);
+  const [authChecked, setAuthChecked] = useState(!NEEDS_AUTH);
 
   useEffect(() => {
     if (!USE_SUPABASE) return;
     let live = true;
     void supabase.auth.getSession().then(({ data }) => {
       if (!live) return;
-      setAuthUser(data.session?.user ?? null);
+      const u = data.session?.user;
+      setAuthUser(u ? { id: u.id, email: u.email ?? undefined } : null);
       setAuthChecked(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setAuthUser(session?.user ?? null);
+      const u = session?.user;
+      setAuthUser(u ? { id: u.id, email: u.email ?? undefined } : null);
       setAuthChecked(true);
     });
     return () => { live = false; sub.subscription.unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    if (!USE_FIREBASE) return;
+    const { auth } = getFirebase();
+    return onAuthStateChanged(auth, (user) => {
+      setAuthUser(user ? { id: user.uid, email: user.email ?? user.displayName ?? undefined } : null);
+      setAuthChecked(true);
+    });
+  }, []);
+
+  const signOut = USE_SUPABASE ? signOutSupabase : USE_FIREBASE ? signOutFirebase : undefined;
 
   if (!authChecked) {
     return (
@@ -54,8 +80,13 @@ export default function App() {
     );
   }
 
-  if (USE_SUPABASE && !authUser) {
-    return <Login />;
+  if (NEEDS_AUTH && !authUser) {
+    return <Login firebase={USE_FIREBASE} />;
+  }
+
+  // Signed in on Firebase, but with the wrong Google account.
+  if (USE_FIREBASE && authUser && authUser.id !== OWNER_UID) {
+    return <NoAccess account={authUser.email} onSignOut={signOutFirebase} />;
   }
 
   // DataProvider only mounts once auth is settled, so load() never runs without
@@ -63,8 +94,31 @@ export default function App() {
   // that must not be mistaken for an empty tracker.
   return (
     <DataProvider key={authUser?.id ?? 'local'}>
-      <AppContent onSignOut={USE_SUPABASE ? signOutUser : undefined} authUser={authUser} />
+      <AppContent onSignOut={signOut} authUser={authUser} />
     </DataProvider>
+  );
+}
+
+// Shown when someone signs in with a Google account that isn't the owner's.
+function NoAccess({ account, onSignOut }: { account?: string; onSignOut: () => Promise<void> }) {
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-brand">
+          <div className="login-logo" style={{ display: 'grid', placeItems: 'center', fontSize: 28 }}>🔒</div>
+          <h1>No access</h1>
+          <p className="muted">This is a private business tracker.</p>
+        </div>
+        <div className="divider" />
+        <p className="tiny" style={{ textAlign: 'center', margin: '16px 0' }}>
+          {account ? <>You're signed in as <strong>{account}</strong>, which isn't the owner of this tracker.</>
+                   : <>This account isn't the owner of this tracker.</>}
+          <br />
+          Sign out and use the owner's account.
+        </p>
+        <button className="btn-google" onClick={() => void onSignOut()}>Sign out</button>
+      </div>
+    </div>
   );
 }
 
@@ -99,7 +153,7 @@ function AppContent({
   authUser,
 }: {
   onSignOut?: () => Promise<void>;
-  authUser: User | null;
+  authUser: Account | null;
 }) {
   const { data, loading, loadError } = useData();
 

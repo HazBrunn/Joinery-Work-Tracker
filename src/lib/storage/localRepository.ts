@@ -6,6 +6,7 @@ const KEY = 'joinery-jobs-tracker:data';
 
 export class LocalRepository implements Repository {
   readonly backendName = 'Local (this device)';
+  readonly seedsDemoData = true;
 
   async load(): Promise<AppData> {
     const raw = localStorage.getItem(KEY);

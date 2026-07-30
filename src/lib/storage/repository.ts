@@ -22,4 +22,14 @@ export interface Repository {
   uploadImage(file: File, jobId: string): Promise<string>;
   /** Human label for the active backend, shown in Settings. */
   readonly backendName: string;
+  /**
+   * Whether an empty store should be filled with demo data on first run.
+   *
+   * True for local storage, where an empty app is a blank page and demo data is
+   * how you see what the app does. False for anything shared or remote: an
+   * empty cloud account is empty deliberately — most likely one you have just
+   * signed into, about to restore a backup — and writing invented clients and
+   * jobs into a real database is worse than showing nothing.
+   */
+  readonly seedsDemoData: boolean;
 }

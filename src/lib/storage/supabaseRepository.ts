@@ -42,6 +42,7 @@ function toStored(value: string): string {
 
 export class SupabaseRepository implements Repository {
   readonly backendName = 'Supabase (cloud sync)';
+  readonly seedsDemoData = false;
 
   async load(): Promise<AppData> {
     const { data: auth } = await supabase.auth.getUser();

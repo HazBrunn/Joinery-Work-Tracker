@@ -74,7 +74,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const alreadySeeded = localStorage.getItem(SEEDED_FLAG) === '1';
       if (cancelled) return;
       // Reaching here means load() succeeded, so "empty" is genuinely empty.
-      if (isEmpty && !alreadySeeded) {
+      // Only the local backend fills that in with demo data: an empty cloud
+      // account is usually one you have just signed into and are about to
+      // restore a backup onto, and inventing clients and jobs in a real
+      // database is worse than showing nothing.
+      if (isEmpty && !alreadySeeded && repoRef.current.seedsDemoData) {
         const seeded = seedData();
         setDataState(seeded);
         await repoRef.current.save(seeded);
