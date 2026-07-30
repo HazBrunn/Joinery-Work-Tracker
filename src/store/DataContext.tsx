@@ -93,6 +93,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Re-read when the app comes back to the foreground.
+  //
+  // save() rewrites every one of this user's rows from what is held here, so a
+  // tab left open on a stale copy would undo anything changed elsewhere the
+  // moment you touched it — and the life tracker can now tick a job task off.
+  // Refreshing on the way back in closes that, because the stale copy is
+  // replaced before anything can be saved over the top of the real one.
+  //
+  // Deliberately setDataState and not setData: this is reading what is already
+  // stored, not a change to store.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || blockedRef.current) return;
+      repoRef.current
+        .load()
+        .then((fresh) => setDataState(fresh))
+        .catch(() => {
+          /* offline, or a transient failure — keep what is on screen and let
+             the next save carry it, exactly as before this existed */
+        });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   const persist = useCallback((next: AppData) => {
     // Last line of defence: never write when the initial load failed.
     if (blockedRef.current) return;
