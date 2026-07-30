@@ -8,22 +8,27 @@ export class LocalRepository implements Repository {
   readonly backendName = 'Local (this device)';
 
   async load(): Promise<AppData> {
+    const raw = localStorage.getItem(KEY);
+    // No key at all is a true first run — the only case that may resolve empty.
+    if (!raw) return emptyData();
+    let parsed: Partial<AppData>;
     try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) return emptyData();
-      const parsed = JSON.parse(raw) as Partial<AppData>;
-      // Merge defensively so older saved data still loads after schema growth.
-      return {
-        clients: parsed.clients ?? [],
-        jobs: parsed.jobs ?? [],
-        expenses: parsed.expenses ?? [],
-        calendarBlocks: parsed.calendarBlocks ?? [],
-        settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
-      };
+      parsed = JSON.parse(raw) as Partial<AppData>;
     } catch (err) {
-      console.error('Failed to load local data, starting fresh', err);
-      return emptyData();
+      // Corrupt payload. Throw rather than resolving empty: the saved string is
+      // still on disk and recoverable by hand, and resolving empty here would
+      // invite the caller to seed demo data straight over the top of it.
+      console.error('Local data is corrupt and was not loaded', err);
+      throw new Error('Saved data on this device could not be read.');
     }
+    // Merge defensively so older saved data still loads after schema growth.
+    return {
+      clients: parsed.clients ?? [],
+      jobs: parsed.jobs ?? [],
+      expenses: parsed.expenses ?? [],
+      calendarBlocks: parsed.calendarBlocks ?? [],
+      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+    };
   }
 
   async save(data: AppData): Promise<void> {

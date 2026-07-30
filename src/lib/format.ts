@@ -58,8 +58,11 @@ export function fmtDateTime(iso?: string | null): string {
   });
 }
 
+// Today as yyyy-mm-dd in LOCAL time. Deliberately not toISOString(), which is
+// UTC and so returns yesterday during British Summer Time between midnight and
+// 1am — enough to date a stage payment or an expense to the wrong day.
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return dateKey(new Date());
 }
 
 // yyyy-mm-dd for a Date in local time (avoids UTC off-by-one).

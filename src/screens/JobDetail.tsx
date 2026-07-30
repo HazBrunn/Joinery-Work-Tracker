@@ -145,7 +145,7 @@ export function JobDetail() {
         <MeasurementsSection job={job} updateJob={updateJob} />
         <QuoteSection job={job} updateJob={updateJob} hpd={hpd} />
         <StagePaymentsSection job={job} updateJob={updateJob} />
-        <AgreedPriceSection job={job} updateJob={updateJob} />
+        <AgreedPriceSection job={job} updateJob={updateJob} hpd={hpd} />
         <TimeSection job={job} updateJob={updateJob} hpd={hpd} />
         <PhotosSection job={job} updateJob={updateJob} />
         <TasksSection job={job} updateJob={updateJob} />
@@ -498,8 +498,18 @@ function StagePaymentsSection({ job, updateJob }: { job: Job; updateJob: (m: (j:
 }
 
 // ── Agreed price ─────────────────────────────────────────────────────────────
-function AgreedPriceSection({ job, updateJob }: { job: Job; updateJob: (m: (j: Job) => void) => void }) {
-  const suggested = suggestedQuote(job, 8);
+function AgreedPriceSection({
+  job,
+  updateJob,
+  hpd,
+}: {
+  job: Job;
+  updateJob: (m: (j: Job) => void) => void;
+  hpd: number;
+}) {
+  // Must use the same hours-per-day as the Quote section above, or the two
+  // sections disagree about the suggested price whenever capacity isn't 8h.
+  const suggested = suggestedQuote(job, hpd);
   const diff = job.agreedPrice != null ? job.agreedPrice - suggested : null;
   return (
     <Collapsible icon="🤝" title="Agreed Price" subtitle={job.agreedPrice != null ? gbp(job.agreedPrice) : ''}>

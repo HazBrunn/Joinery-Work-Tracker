@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { firebaseConfigured, getFirebase, signOutUser } from './lib/firebase';
+import type { User } from '@supabase/supabase-js';
+import { supabase, supabaseConfigured, signOutUser } from './lib/supabase';
 import { DataProvider } from './store/DataContext';
 import { useData } from './store/DataContext';
 import { BottomNav } from './components/BottomNav';
@@ -16,30 +16,34 @@ import { Calendar } from './screens/Calendar';
 import { Finances } from './screens/Finances';
 import { SettingsScreen } from './screens/Settings';
 
-// True when the Firebase backend is active (baked in at build time by Vite).
-const USE_FIREBASE = import.meta.env.VITE_DATA_BACKEND === 'firebase' && firebaseConfigured();
+// True when the Supabase backend is active (baked in at build time by Vite).
+// Without it the app runs on local storage with no sign-in, which is what makes
+// a checkout with no environment still usable.
+const USE_SUPABASE = import.meta.env.VITE_DATA_BACKEND === 'supabase' && supabaseConfigured();
 
-// The owner's Firebase Auth UID. Only this account may use the app — any other
-// signed-in Google account is shown the "no access" screen. This is the same UID
-// enforced in firebase/firestore.rules; it's not a secret (the database rules are
-// the real guard), this just gives other accounts a clean rejection instead of an
-// empty/demo app. An env var (VITE_OWNER_UID) overrides it if ever set.
-const OWNER_UID = import.meta.env.VITE_OWNER_UID || 'Zzrd3zL0gNQI1DsT263Dw8qfFKg1';
+// There is no owner allow-list any more. Every row carries a user_id and the
+// RLS policy on it is the boundary, so another account signing in gets its own
+// empty tracker rather than a rejection screen — and, more to the point, cannot
+// read a single client, quote or margin belonging to anyone else.
 
 export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
-  // If Firebase isn't in use, skip the auth check entirely.
-  const [authChecked, setAuthChecked] = useState(!USE_FIREBASE);
+  // If Supabase isn't in use, skip the auth check entirely.
+  const [authChecked, setAuthChecked] = useState(!USE_SUPABASE);
 
   useEffect(() => {
-    if (!USE_FIREBASE) return;
-    const { auth } = getFirebase();
-    // onAuthStateChanged fires immediately with the persisted session (if any),
-    // so the loading flash is typically <200 ms.
-    return onAuthStateChanged(auth, (user) => {
-      setAuthUser(user);
+    if (!USE_SUPABASE) return;
+    let live = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!live) return;
+      setAuthUser(data.session?.user ?? null);
       setAuthChecked(true);
     });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setAuthUser(session?.user ?? null);
+      setAuthChecked(true);
+    });
+    return () => { live = false; sub.subscription.unsubscribe(); };
   }, []);
 
   if (!authChecked) {
@@ -50,50 +54,40 @@ export default function App() {
     );
   }
 
-  if (USE_FIREBASE && !authUser) {
+  if (USE_SUPABASE && !authUser) {
     return <Login />;
   }
 
-  // Signed in, but with the wrong Google account — reject before any data loads.
-  if (USE_FIREBASE && authUser && authUser.uid !== OWNER_UID) {
-    return <NoAccess account={authUser.email ?? authUser.displayName ?? undefined} />;
-  }
-
-  // DataProvider only mounts after auth is confirmed, so load() is only called
-  // once the user is signed in and authReady resolves immediately.
+  // DataProvider only mounts once auth is settled, so load() never runs without
+  // a session — which matters, because a signed-out load reads zero rows and
+  // that must not be mistaken for an empty tracker.
   return (
-    <DataProvider>
-      <AppContent onSignOut={USE_FIREBASE ? signOutUser : undefined} authUser={authUser} />
+    <DataProvider key={authUser?.id ?? 'local'}>
+      <AppContent onSignOut={USE_SUPABASE ? signOutUser : undefined} authUser={authUser} />
     </DataProvider>
   );
 }
 
-// Shown when someone signs in with a Google account that isn't the owner's.
-function NoAccess({ account }: { account?: string }) {
+// Shown when the dataset could not be loaded. Deliberately offers only a retry:
+// no route into the app, because every write path would risk the stored data.
+function LoadFailed({ message }: { message: string }) {
   return (
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
           <div className="login-logo" style={{ display: 'grid', placeItems: 'center', fontSize: 28 }}>
-            🔒
+            ⚠️
           </div>
-          <h1>No access</h1>
-          <p className="muted">This is a private business tracker.</p>
+          <h1>Can't load your data</h1>
+          <p className="muted">{message}</p>
         </div>
         <div className="divider" />
         <p className="tiny" style={{ textAlign: 'center', margin: '16px 0' }}>
-          {account ? (
-            <>
-              You're signed in as <strong>{account}</strong>, which isn't the owner of this tracker.
-            </>
-          ) : (
-            <>This Google account isn't the owner of this tracker.</>
-          )}
-          <br />
-          Sign out and use the owner's Google account.
+          Nothing has been changed or deleted — your records are still saved. The app stays locked
+          until it can read them, so that nothing overwrites what's there.
         </p>
-        <button className="btn-google" onClick={() => void signOutUser()}>
-          Sign out
+        <button className="btn-google" onClick={() => window.location.reload()}>
+          Try again
         </button>
       </div>
     </div>
@@ -107,7 +101,7 @@ function AppContent({
   onSignOut?: () => Promise<void>;
   authUser: User | null;
 }) {
-  const { data, loading } = useData();
+  const { data, loading, loadError } = useData();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', data.settings.theme);
@@ -121,6 +115,13 @@ function AppContent({
         <div className="spinner-wrap">Loading your workshop…</div>
       </div>
     );
+  }
+
+  // Your records exist but could not be read. Showing the app here would mean
+  // showing an empty one, and the first edit would save that emptiness over the
+  // top of them — so stop at a wall instead.
+  if (loadError) {
+    return <LoadFailed message={loadError} />;
   }
 
   return (

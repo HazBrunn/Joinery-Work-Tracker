@@ -19,6 +19,12 @@ interface DataContextValue {
   data: AppData;
   loading: boolean;
   backendName: string;
+  /**
+   * Set when the initial load failed. While it is set the app must not be used:
+   * the in-memory dataset is empty but the stored one is not, so writing would
+   * destroy real records. Persistence is disabled until a successful reload.
+   */
+  loadError: string | null;
   /** Replace the whole dataset (used by import / seed / clear). */
   setData: (next: AppData) => void;
   /** Mutate via a producer that receives a draft copy. */
@@ -38,19 +44,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const repoRef = useRef<Repository>(createRepository());
   const [data, setDataState] = useState<AppData>(emptyData());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors loadError for the persist path, which needs the current value
+  // without being re-created (and re-debounced) on every render.
+  const blockedRef = useRef(false);
 
   // Initial load. Seed demo data on a truly first run (no saved data, no flag).
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const loaded = await repoRef.current.load();
+      let loaded: AppData;
+      try {
+        loaded = await repoRef.current.load();
+      } catch (err) {
+        // The store has data we could not read. Do NOT seed and do NOT save —
+        // either would overwrite real records with an empty or demo dataset.
+        if (cancelled) return;
+        console.error('Initial load failed; persistence disabled', err);
+        blockedRef.current = true;
+        setLoadError(err instanceof Error ? err.message : 'Your data could not be loaded.');
+        setLoading(false);
+        return;
+      }
       const isEmpty =
         loaded.clients.length === 0 &&
         loaded.jobs.length === 0 &&
         loaded.expenses.length === 0;
       const alreadySeeded = localStorage.getItem(SEEDED_FLAG) === '1';
       if (cancelled) return;
+      // Reaching here means load() succeeded, so "empty" is genuinely empty.
       if (isEmpty && !alreadySeeded) {
         const seeded = seedData();
         setDataState(seeded);
@@ -67,6 +90,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const persist = useCallback((next: AppData) => {
+    // Last line of defence: never write when the initial load failed.
+    if (blockedRef.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       void repoRef.current.save(next);
@@ -116,6 +141,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [setData]);
 
   const clearAll = useCallback(() => {
+    if (blockedRef.current) return;
     const blank = emptyData();
     // keep current settings (theme/rates) on a wipe of business data
     setDataState((prev) => {
@@ -135,6 +161,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     () => ({
       data,
       loading,
+      loadError,
       backendName: repoRef.current.backendName,
       setData,
       update,
@@ -143,7 +170,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       clearAll,
       uploadImage,
     }),
-    [data, loading, setData, update, updateSettings, loadDemo, clearAll, uploadImage],
+    [data, loading, loadError, setData, update, updateSettings, loadDemo, clearAll, uploadImage],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -131,7 +131,7 @@ export interface TimeEntry {
 export interface Photo {
   id: string;
   group: PhotoGroup;
-  dataUrl: string; // local: data URL; firebase: Storage download URL
+  dataUrl: string; // local: a data URL; supabase: a signed URL, stored as its object path
   caption?: string;
 }
 

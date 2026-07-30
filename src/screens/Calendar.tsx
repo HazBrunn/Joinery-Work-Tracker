@@ -5,15 +5,23 @@ import { EmptyState, Field, PriorityDot, Sheet } from '../components/ui';
 import { useData } from '../store/DataContext';
 import { CalendarBlock, Job } from '../types';
 import { uid } from '../lib/id';
-import { dateKey, daysBetween, fmtDate, fmtDateTime, relativeDeadline, todayISO } from '../lib/format';
+import {
+  dateKey,
+  daysBetween,
+  fmtDateShort,
+  fmtDateTime,
+  relativeDeadline,
+  todayISO,
+} from '../lib/format';
 
 type View = 'month' | 'list';
 
-// A derived, unified calendar event for display.
+// A derived, unified calendar event for display. Blocks spanning several days
+// produce one event per day they cover, all sharing the same blockId.
 interface CalEvent {
   id: string;
   kind: 'visit' | 'task' | 'prospective' | 'confirmed' | 'time_off';
-  date: string; // primary date (yyyy-mm-dd)
+  date: string; // the day this event sits on (yyyy-mm-dd)
   datetime?: string; // for ordering within a day
   title: string;
   jobId: string | null;
@@ -21,6 +29,26 @@ interface CalEvent {
   priority?: 'red' | 'amber' | 'green';
   done?: boolean;
   color: string;
+  /** Set on events derived from a CalendarBlock, for confirm/remove actions. */
+  blockId?: string;
+  /** Set on events derived from a JobTask, for tick-to-complete. */
+  taskId?: string;
+  /** Full extent of the underlying block, for showing a date range. */
+  spanStart?: string;
+  spanEnd?: string;
+}
+
+// yyyy-mm-dd → "7 Aug", parsed as local midnight so the day never shifts.
+function shortDay(day: string): string {
+  return fmtDateShort(`${day}T00:00:00`);
+}
+
+// "7 – 9 Aug" for a multi-day block, a single date for a one-day one.
+function spanLabel(e: CalEvent): string {
+  if (e.spanStart && e.spanEnd && e.spanStart !== e.spanEnd) {
+    return `${shortDay(e.spanStart)} – ${shortDay(e.spanEnd)}`;
+  }
+  return shortDay(e.date);
 }
 
 const KIND_COLOR: Record<CalEvent['kind'], string> = {
@@ -41,6 +69,9 @@ export function Calendar() {
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // The day a new block should default to. Held separately from selectedDay so
+  // the day sheet can close before the block form opens without losing it.
+  const [blockPreset, setBlockPreset] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
 
   // Build all events from jobs + blocks.
@@ -72,20 +103,32 @@ export function Calendar() {
           priority: t.priority,
           done: t.done,
           color: KIND_COLOR.task,
+          taskId: t.id,
         });
       }
     }
     for (const b of data.calendarBlocks) {
-      // Expand spanning blocks across each day for the grid; keep one logical event for list.
-      out.push({
-        id: `block-${b.id}`,
-        kind: b.type,
-        date: b.startDate,
-        title: b.label,
-        jobId: b.jobId,
-        jobTitle: data.jobs.find((j) => j.id === b.jobId)?.title,
-        color: KIND_COLOR[b.type],
-      });
+      // A block covers every day from start to end inclusive, so emit an event
+      // for each of them: the month grid then marks the whole run, and any day
+      // in the middle can confirm or remove the block. (Previously only the
+      // start date carried the event, so day two of a booked install showed
+      // nothing at all.) The fallback keeps a malformed range visible.
+      const days = daysBetween(b.startDate, b.endDate);
+      const span = days.length > 0 ? days : [b.startDate];
+      for (const day of span) {
+        out.push({
+          id: `block-${b.id}-${day}`,
+          kind: b.type,
+          date: day,
+          title: b.label,
+          jobId: b.jobId,
+          jobTitle: data.jobs.find((j) => j.id === b.jobId)?.title,
+          color: KIND_COLOR[b.type],
+          blockId: b.id,
+          spanStart: b.startDate,
+          spanEnd: b.endDate,
+        });
+      }
     }
     return out;
   }, [data.jobs, data.calendarBlocks]);
@@ -118,7 +161,13 @@ export function Calendar() {
     <Screen
       title="Calendar"
       action={
-        <button className="header-action" onClick={() => setAdding(true)}>
+        <button
+          className="header-action"
+          onClick={() => {
+            setBlockPreset(null);
+            setAdding(true);
+          }}
+        >
           + Block
         </button>
       }
@@ -152,7 +201,7 @@ export function Calendar() {
         <BlockForm
           jobs={data.jobs}
           capacity={capacity}
-          presetDate={selectedDay ?? undefined}
+          presetDate={blockPreset ?? undefined}
           onClose={() => setAdding(false)}
           onSave={(block) => {
             update((draft) => {
@@ -172,6 +221,10 @@ export function Calendar() {
           isTimeOff={timeOffDays.has(selectedDay)}
           onClose={() => setSelectedDay(null)}
           onAdd={() => {
+            // Close the day sheet before opening the block form, otherwise the
+            // two stack on top of each other.
+            setBlockPreset(selectedDay);
+            setSelectedDay(null);
             setAdding(true);
           }}
           onOpenJob={(jid) => {
@@ -293,7 +346,12 @@ function ListView({
       const ad = a.datetime || a.date;
       const bd = b.datetime || b.date;
       return ad < bd ? -1 : ad > bd ? 1 : 0;
-    });
+    })
+    // A multi-day block is one thing to do, not one per day — collapse it to its
+    // earliest still-relevant day and label it with the full range. Filtering
+    // first means a block already under way shows from today rather than from a
+    // start date that has passed.
+    .filter((e, _i, all) => !e.blockId || all.find((x) => x.blockId === e.blockId) === e);
 
   const toggleTask = (taskId: string) => {
     update((draft) => {
@@ -324,8 +382,8 @@ function ListView({
       ) : (
         <div className="stack">
           {upcoming.map((e) => {
-            const rel = e.datetime ? relativeDeadline(e.datetime) : { text: fmtDate(e.date), overdue: false };
-            const taskId = e.kind === 'task' ? e.id.replace('task-', '') : null;
+            const rel = e.datetime ? relativeDeadline(e.datetime) : { text: '', overdue: false };
+            const taskId = e.taskId ?? null;
             return (
               <div key={e.id} className="list-row">
                 {taskId ? (
@@ -353,7 +411,7 @@ function ListView({
                   </div>
                 </button>
                 <span className={`tiny nowrap ${rel.overdue ? 'text-red' : ''}`}>
-                  {e.datetime ? fmtDateTime(e.datetime) : fmtDate(e.date)}
+                  {e.datetime ? fmtDateTime(e.datetime) : spanLabel(e)}
                 </span>
               </div>
             );
@@ -452,8 +510,8 @@ function DaySheet({
       ) : (
         <div className="stack-sm">
           {events.map((e) => {
-            const blockId = e.id.startsWith('block-') ? e.id.replace('block-', '') : null;
-            const block = blockId ? data.calendarBlocks.find((b) => b.id === blockId) : null;
+            const block = e.blockId ? data.calendarBlocks.find((b) => b.id === e.blockId) : null;
+            const multiDay = e.spanStart !== e.spanEnd;
             return (
               <div key={e.id} className="line-item">
                 <span className="dot" style={{ background: e.color }} />
@@ -461,6 +519,7 @@ function DaySheet({
                   <div style={{ fontWeight: 600 }}>{e.title}</div>
                   <div className="tiny">
                     <KindLabel kind={e.kind} />
+                    {block && multiDay ? ` · ${spanLabel(e)}` : ''}
                   </div>
                 </span>
                 {block && block.type === 'prospective' && (

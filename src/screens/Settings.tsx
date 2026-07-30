@@ -1,8 +1,10 @@
+import { useRef, useState } from 'react';
 import { Screen } from '../components/Screen';
 import { Field } from '../components/ui';
 import { useData } from '../store/DataContext';
 import { gbp2 } from '../lib/format';
-import type { User } from '../lib/firebase';
+import { describe, exportBackup, parseBackup, summarise } from '../lib/backup';
+import type { User } from '@supabase/supabase-js';
 
 interface Props {
   onSignOut?: () => Promise<void>;
@@ -10,8 +12,35 @@ interface Props {
 }
 
 export function SettingsScreen({ onSignOut, authUser }: Props) {
-  const { data, updateSettings, backendName, loadDemo, clearAll } = useData();
+  const { data, setData, updateSettings, backendName, loadDemo, clearAll } = useData();
   const s = data.settings;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  // Restore is the one action here that can destroy a morning's work, so it
+  // states both sides of the trade in the confirm and refuses anything it
+  // can't parse cleanly.
+  async function onRestoreFile(file?: File) {
+    if (fileRef.current) fileRef.current.value = ''; // allow re-picking the same file
+    if (!file) return;
+    setNotice(null);
+    let incoming;
+    try {
+      incoming = parseBackup(await file.text());
+    } catch (err) {
+      setNotice({ kind: 'err', text: err instanceof Error ? err.message : 'That file could not be read.' });
+      return;
+    }
+    const now = describe(summarise(data));
+    const next = describe(summarise(incoming));
+    const ok = confirm(
+      `Restore this backup?\n\nIn the app now: ${now}\nIn the backup: ${next}\n\n` +
+        `Everything currently in the app will be replaced. Export a backup first if you haven't.`,
+    );
+    if (!ok) return;
+    setData(incoming);
+    setNotice({ kind: 'ok', text: `Restored ${next}.` });
+  }
 
   return (
     <Screen title="Settings" back>
@@ -73,16 +102,16 @@ export function SettingsScreen({ onSignOut, authUser }: Props) {
             <div className="summary-line" style={{ padding: 0 }}>
               <span className="muted">Signed in as</span>
               <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>
-                {authUser.email ?? authUser.displayName ?? 'Google account'}
+                {authUser.email ?? 'Signed in'}
               </span>
             </div>
             <div className="summary-line" style={{ padding: 0 }}>
               <span className="muted">Your user ID</span>
-              <span className="mono" style={{ fontSize: '0.75rem' }}>{authUser.uid}</span>
+              <span className="mono" style={{ fontSize: '0.75rem' }}>{authUser.id}</span>
             </div>
             <p className="tiny" style={{ margin: 0 }}>
-              To lock data strictly to your account, update <code>firebase/firestore.rules</code> to check{' '}
-              <code>request.auth.uid == "{authUser.uid}"</code>.
+              Every record here is filed under this ID, and the database refuses to return a row to
+              anyone else. No other account can see your clients, quotes or figures.
             </p>
             <div className="divider" />
             {onSignOut && (
@@ -98,6 +127,40 @@ export function SettingsScreen({ onSignOut, authUser }: Props) {
           </div>
         </>
       )}
+
+      <div className="section-title">Backup</div>
+      <div className="card pad stack-sm">
+        <p className="muted" style={{ margin: 0 }}>
+          Everything the tracker holds — clients, jobs, quotes, payments, time, expenses and
+          calendar — in one file you keep. Worth doing before any big change.
+        </p>
+        <div className="summary-line" style={{ padding: 0 }}>
+          <span className="muted">Currently holding</span>
+          <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{describe(summarise(data))}</span>
+        </div>
+        <button className="btn" onClick={() => exportBackup(data)}>
+          ⬇ Export a backup file
+        </button>
+        <button className="btn" onClick={() => fileRef.current?.click()}>
+          ⬆ Restore from a backup file
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(e) => void onRestoreFile(e.target.files?.[0])}
+        />
+        {notice && (
+          <div className={`callout ${notice.kind === 'ok' ? 'ok' : 'warn'}`} style={{ margin: 0 }}>
+            {notice.text}
+          </div>
+        )}
+        <p className="tiny" style={{ margin: 0 }}>
+          Restoring replaces everything currently in the app. You'll be shown both sets of numbers
+          and asked to confirm first.
+        </p>
+      </div>
 
       <div className="section-title">Data</div>
       <div className="card pad stack-sm">

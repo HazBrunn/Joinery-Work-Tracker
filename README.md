@@ -33,56 +33,49 @@ The app is a PWA — open it on a phone and "Add to Home Screen".
 **Local-first by default** — all data lives in your browser via `localStorage`, so the app
 works with zero setup. Demo data is seeded on first run (clear or reload it from Settings).
 
-### Switching to Firebase (cloud sync + photo storage)
+### Switching to Supabase (cloud sync + photo storage)
 
 The app talks to a storage abstraction (`src/lib/storage/`), so moving to the cloud is a config
-change, not a rewrite. In the [Firebase console](https://console.firebase.google.com/) for your
-project:
+change, not a rewrite.
 
-1. **Firestore Database** → Create database (production mode). Then **Rules** → paste
-   `firebase/firestore.rules` and Publish.
-2. **Storage** → Get started. Then **Rules** → paste `firebase/storage.rules` and Publish.
-   *(Storage requires the Blaze pay-as-you-go plan — only needed for photo uploads.)*
-3. **Authentication** → Get started → enable the **Google** sign-in provider.
-4. **Project settings → General → Your apps**: add a **Web app** (`</>`) if you haven't, then copy
-   its config values.
-5. Copy `.env.example` to `.env`, set `VITE_DATA_BACKEND=firebase`, and fill in the six
-   `VITE_FIREBASE_*` values from that config.
-6. Restart the dev server.
+Joinery shares one Supabase project with the life tracker, in a schema of its own (`joinery`,
+beside `public` and `fitness`). The schema and its policies are in that repo, at
+`Life-Tracker/supabase/migrations/0013_joinery_schema.sql`.
 
-The dataset is stored as a single JSON document at `app_state/main` (immediate cross-device sync).
-Photos are uploaded to **Firebase Storage** under `job-photos/{jobId}/…` and only their download
-URL is kept in the document — this stays well under Firestore's 1 MiB document limit.
+1. Run that migration in the Supabase dashboard's SQL editor.
+2. **Project Settings → API → Exposed schemas** — add `joinery`. Without this every request 404s.
+3. Copy `.env.example` to `.env`, set `VITE_DATA_BACKEND=supabase`, and fill in the project URL
+   and anon key from **Project Settings → API**.
+4. Restart the dev server, then create an account on the login screen (or sign in with the one
+   you already use for the life tracker — it is the same auth).
+
+Unlike the Firebase backend this replaced, the dataset is **relational**: eleven tables in the
+`joinery` schema, one per list. `SupabaseRepository` decomposes `AppData` on save and recomposes
+it on load, so no screen knows the difference — but joinery deadlines are now a SQL query, which
+is what lets the life tracker's planner read them.
+
+Saving rewrites your rows inside a single Postgres function (`joinery.save_state`), so a save
+either lands completely or not at all.
+
+Photos go to a **private** Storage bucket (`joinery-photos`) under `{user_id}/{job_id}/…`. What
+is stored on the record is the object path; a signed URL is minted at load time. A public bucket
+would have made every photograph of a client's home readable by anyone holding the link.
 
 ## Security
 
-The app is locked to a single owner. Three layers enforce this:
+Every row carries a `user_id`, and a row-level security policy on it is the boundary — the
+database returns nothing that isn't yours, whatever the front end asks for. There is no owner
+allow-list any more and none is needed: another account signing in gets its own empty tracker,
+not a rejection screen and not a glimpse of anyone else's clients, quotes or margins.
 
-| Layer | Where | What it does |
-|-------|-------|-------------|
-| **Google Sign-In** | App login screen | No anonymous access — must sign in with a Google account |
-| **Owner UID gate** | `src/App.tsx` | Only the owner's Google account gets past the login; any other account sees a "No access" screen |
-| **Firestore rule** | `firebase/firestore.rules` | Database physically rejects read/write from any UID other than the owner's |
-
-### Setting up the owner UID
-
-1. Deploy the app and sign in with your Google account.
-2. Go to **Settings → Account** — your UID is shown there.
-3. In the Firebase console → **Firestore → Rules**, make sure `firebase/firestore.rules` is
-   published with your UID in the `request.auth.uid ==` check.
-4. In `src/App.tsx`, the `OWNER_UID` constant is already set — update it if you ever need to
-   change accounts. It can also be set via the `VITE_OWNER_UID` environment variable.
-
-> **Your data is protected at the database level regardless of the front-end.** Even if someone
-> bypasses the login screen, Firestore will reject their requests because they won't match the
-> owner UID in the security rules.
+Photo objects are scoped the same way, by the user id in their path.
 
 ## Tech
 
 - React 18 + TypeScript + Vite
 - React Router (hash routing, PWA-friendly)
 - `vite-plugin-pwa` for installability + offline caching
-- `firebase` (Firestore + Storage + Google Auth) for the optional cloud backend
+- `@supabase/supabase-js` (Postgres + Storage + email auth) for the optional cloud backend
 - Plain CSS design system (`src/styles/global.css`) — deep-blue + amber, light/dark modes
 
 ## Responsive layout
@@ -100,12 +93,9 @@ The project is Vercel-ready (`vercel.json` sets the Vite build + SPA rewrite).
    import the repo. Vercel auto-detects Vite.
 2. In the Vercel project's **Settings → Environment Variables**, add the same keys from your
    `.env` (the file itself is gitignored, so it is not uploaded):
-   `VITE_DATA_BACKEND=firebase`, plus the six `VITE_FIREBASE_*` values.
-3. **Deploy.** Then in the Firebase console:
-   - **Authentication → Settings → Authorized domains** — add your `*.vercel.app` domain.
-   - **Authentication → Sign-in method → Google** — enable it and set a support email.
-4. Sign in to the live app, copy your UID from Settings → Account, and publish the Firestore
-   rules with that UID to fully lock down the database.
+   `VITE_DATA_BACKEND=supabase`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+3. **Deploy**, then add the deployed URL under **Supabase → Authentication → URL Configuration →
+   Redirect URLs** if you turn on email confirmation.
 
 ## Design
 

@@ -3,7 +3,14 @@
 import { AppData } from '../../types';
 
 export interface Repository {
-  /** Load the entire dataset. */
+  /**
+   * Load the entire dataset.
+   *
+   * Contract: resolve with empty data ONLY when the store is genuinely empty
+   * (a true first run). Any failure — network, permissions, corrupt payload —
+   * must THROW. The caller seeds demo data into an empty store, so a failure
+   * that resolved as "empty" would let demo data overwrite real records.
+   */
   load(): Promise<AppData>;
   /** Persist the entire dataset. Simple whole-document save keeps the model trivial. */
   save(data: AppData): Promise<void>;

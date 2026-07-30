@@ -11,7 +11,13 @@
       "Bash(powershell -Command 'Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }')",
       "mcp__Claude_Preview__preview_start",
       "Bash(rm -f src/lib/storage/supabaseRepository.ts)",
-      "Bash(rm -rf supabase)"
+      "Bash(rm -rf supabase)",
+      "Bash(git branch *)",
+      "Bash(git remote *)",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\esche\\\\OneDrive\\\\Desktop\\\\Joinery Business Tracker\\\\src\\\\styles\\\\global.css\" -Raw\\).Length)",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)",
+      "Bash(python -c ' *)"
     ]
   }
 }
